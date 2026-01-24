@@ -1276,7 +1276,7 @@ END OF RECORD`.trim();
                       borderRadius: 4,
                       border: "none",
                       background: accent,
-                      color: "white",
+                      color: "black",
                       cursor: "pointer",
                       fontWeight: 500,
                     }}

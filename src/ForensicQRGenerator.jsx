@@ -511,6 +511,8 @@ END OF RECORD`.trim();
         display: "flex",
         justifyContent: "center",
         WebkitFontSmoothing: "antialiased",
+        boxSizing: "border-box",
+        overflowX: "hidden"
       }}
     >
       <div style={{ width: "100%", maxWidth: 850 }}>
@@ -820,13 +822,13 @@ END OF RECORD`.trim();
           </div>
         )}
 
-        {/* GENERATOR */}
+        {/* EVIDENCE INTAKE FORM: VERTICAL STACKING FOR MOBILE CLARITY */}
         {tab === "generator" && (
           <div style={{ animation: "fadeIn 0.5s ease" }}>
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                display: "flex",
+                flexDirection: "column",
                 gap: 20,
                 marginBottom: 20,
               }}

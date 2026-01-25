@@ -513,7 +513,7 @@ END OF RECORD`.trim();
         WebkitFontSmoothing: "antialiased",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 850 }} className="mobile-padding">
+      <div style={{ width: "100%", maxWidth: 850, overflowX: "hidden" }} className="mobile-padding">
         {/* TOP BAR */}
         <div style={{
           padding: "20px 0",
@@ -522,15 +522,17 @@ END OF RECORD`.trim();
           alignItems: 'center',
           marginBottom: '20px',
           position: 'relative',
-          gap: '20px'
+          gap: '20px',
+          width: "100%"
         }} className="mobile-stack">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', maxWidth: "100%" }}>
             <img 
               src={phanixLogo} 
               alt="PHANIX" 
               style={{ 
                 width: '40px', 
                 height: '40px', 
+                flexShrink: 0,
                 borderRadius: '50%',
                 boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
                 border: `2px solid var(--accent)`
@@ -541,12 +543,13 @@ END OF RECORD`.trim();
               zIndex: 1,
               color: "var(--text-primary)",
               fontWeight: 800,
-              fontSize: 20,
-              letterSpacing: 2,
+              fontSize: 18,
+              letterSpacing: 1,
               fontFamily: 'inherit',
-              textShadow: '0 0 15px rgba(59, 130, 246, 0.3)'
+              textShadow: '0 0 15px rgba(59, 130, 246, 0.3)',
+              wordBreak: "break-word"
             }} className="mobile-text-center">
-              FORENSIC-QR-ARCHITECT
+              FORENSIC QR ARCHITECT
             </span>
           </div>
           
@@ -585,15 +588,16 @@ END OF RECORD`.trim();
           className="glass"
           style={{
             marginBottom: 30,
-            padding: 32,
+            padding: "32px 24px",
             borderRadius: "24px",
             position: "relative",
             zIndex: 50,
+            width: "100%"
           }}
         >
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30 }} className="mobile-stack">
-            <div className="mobile-text-center">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30, width: "100%" }} className="mobile-stack">
+            <div className="mobile-text-center" style={{ width: "100%" }}>
               <h1 style={{
                 margin: 0,
                 fontSize: 32,
@@ -603,8 +607,8 @@ END OF RECORD`.trim();
               }}>
                 PHANIX
               </h1>
-              <p style={{ margin: "12px 0 0", color: "var(--text-secondary)", fontSize: 16, maxWidth: 500, lineHeight: 1.6 }}>
-                <strong style={{ color: "var(--accent)" }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
+              <p style={{ margin: "12px 0 0", color: "var(--text-secondary)", fontSize: 16, maxWidth: 500, lineHeight: 1.6, marginLeft: "auto", marginRight: "auto" }}>
+                <strong style={{ color: "var(--text-primary)" }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
                 Deploying advanced digital integrity protocols for the modern forensic workflow. 
                 Visit <span 
                   onClick={triggerIconPulse}
@@ -612,8 +616,8 @@ END OF RECORD`.trim();
                     color: "var(--accent)", 
                     cursor: 'pointer', 
                     textDecoration: 'none',
-                    borderBottom: `1px solid var(--accent)`,
-                    fontWeight: 600,
+                    borderBottom: `2px solid var(--accent)`,
+                    fontWeight: 700,
                     transition: 'all 0.2s'
                   }}
                 >PHANIX</span> for more info.
@@ -716,37 +720,38 @@ END OF RECORD`.trim();
           <div style={{
             marginTop: 30,
             padding: "20px",
-            background: "#18181b",
-            borderRadius: "8px",
-            border: "1px solid #3f3f46",
+            background: "rgba(0,0,0,0.4)",
+            borderRadius: "16px",
+            border: "1px solid var(--glass-border)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: "15px"
+            gap: "15px",
+            width: "100%"
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ 
                     width: '36px', 
                     height: '36px', 
-                    borderRadius: '6px', 
-                    background: 'rgba(59, 130, 246, 0.15)', 
+                    borderRadius: '8px', 
+                    background: 'var(--accent)', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    color: accent,
+                    color: "white",
                     fontSize: '16px',
-                    fontWeight: 700
+                    fontWeight: 800
                 }}>
                     P
                 </div>
                 <div>
-                    <h3 style={{ margin: "0 0 2px", fontSize: 14, color: "#f4f4f5", fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        Phaneendhar Investigation Expert
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+                    <h3 style={{ margin: "0 0 2px", fontSize: 14, color: "var(--text-primary)", fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Phaneendhar Expert
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
                     </h3>
-                    <p style={{ margin: 0, fontSize: 13, color: "#a1a1aa" }}>
-                        Advanced tools for helping forensic integrity.
+                    <p style={{ margin: 0, fontSize: 13, color: "var(--text-secondary)" }}>
+                        Advanced tools for forensic integrity.
                     </p>
                 </div>
             </div>
@@ -755,30 +760,17 @@ END OF RECORD`.trim();
               href="https://p-h-a-n-i-x-investigation-e-xpert.vercel.app/"
               target="_blank"
               rel="noopener noreferrer"
+              className="btn-primary"
               style={{
-                padding: "8px 20px",
-                borderRadius: "6px",
-                background: accent,
-                border: "none",
-                color: "white",
-                fontSize: 13,
-                fontWeight: 500,
-                textDecoration: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#2563eb";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = accent;
+                padding: "10px 20px",
+                borderRadius: "12px",
+                fontSize: 14,
+                fontWeight: 600,
+                width: window.innerWidth < 480 ? "100%" : "auto"
               }}
             >
               <span>Launch Suite</span>
-              <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>→</span>
+              <span style={{ fontSize: "1.2em" }}>→</span>
             </a>
           </div>
         </div>
@@ -1330,25 +1322,25 @@ END OF RECORD`.trim();
                     className="glass"
                     style={{
                       flex: 1,
-                      padding: "12px 16px",
-                      borderRadius: 12,
+                      padding: "14px 16px",
+                      borderRadius: 14,
                       color: "var(--text-primary)",
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      fontSize: 14
                     }}
                   >
                     Download
                   </button>
                   <button
                     onClick={copyReport}
+                    className="btn-primary"
                     style={{
                       flex: 1,
-                      padding: "8px 16px",
-                      borderRadius: 4,
-                      border: "none",
-                      background: accent,
-                      color: "black",
-                      cursor: "pointer",
-                      fontWeight: 500,
+                      padding: "14px 16px",
+                      borderRadius: 14,
+                      color: "white",
+                      fontWeight: 700,
+                      fontSize: 14
                     }}
                   >
                     Copy Data
@@ -1356,82 +1348,24 @@ END OF RECORD`.trim();
                 </div>
 
                 <div
+                  className="glass"
                   style={{
-                    marginTop: 20,
-                    background: "#18181b",
-                    padding: 15,
-                    borderRadius: 4,
+                    marginTop: 24,
+                    padding: 20,
+                    borderRadius: 16,
                     width: "100%",
-                    boxSizing: "border-box",
-                    overflowX: "auto",
                     textAlign: "left",
+                    background: "rgba(0,0,0,0.4)"
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: 10,
-                      fontWeight: "bold",
-                      color: "#a1a1aa",
-                      marginBottom: 4,
-                      letterSpacing: 1,
-                    }}
-                  >
-                    PACKAGE ID
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 12,
-                      color: "#f4f4f5",
-                      marginBottom: 12,
-                    }}
-                  >
-                    {manifest.id}
-                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: 1 }}>PACKAGE ID</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-primary)", marginBottom: 16, wordBreak: "break-all" }}>{manifest.id}</div>
 
-                  <div
-                    style={{
-                      fontSize: 10,
-                      fontWeight: "bold",
-                      color: "#a1a1aa",
-                      marginBottom: 4,
-                      letterSpacing: 1,
-                    }}
-                  >
-                    TIMESTAMP
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 12,
-                      color: "#f4f4f5",
-                      marginBottom: 12,
-                    }}
-                  >
-                    {manifest.timestamp}
-                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: 1 }}>TIMESTAMP</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-primary)", marginBottom: 16 }}>{manifest.timestamp}</div>
 
-                  <div
-                    style={{
-                      fontSize: 10,
-                      fontWeight: "bold",
-                      color: "#a1a1aa",
-                      marginBottom: 4,
-                      letterSpacing: 1,
-                    }}
-                  >
-                    INTEGRITY HASH
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 12,
-                      color: accent,
-                      wordBreak: "break-all",
-                    }}
-                  >
-                    {manifest.hash}
-                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: 1 }}>INTEGRITY HASH</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--accent)", wordBreak: "break-all", fontWeight: 600 }}>{manifest.hash}</div>
                 </div>
               </div>
             )}

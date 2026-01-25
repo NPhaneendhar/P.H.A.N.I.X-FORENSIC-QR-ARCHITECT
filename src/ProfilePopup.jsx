@@ -18,28 +18,28 @@ export default function ProfilePopup({ isOpen, onClose }) {
     <div
       style={{
         position: 'absolute',
-        top: '50px',
-        right: '-10px',
+        top: '60px',
+        right: '0',
         zIndex: 2000,
         pointerEvents: isOpen ? 'auto' : 'none',
         filter: isOpen ? 'opacity(1) translateY(0) scale(1)' : 'opacity(0) translateY(-10px) scale(0.96)',
         transformOrigin: 'top right',
         transition: 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
         opacity: isOpen ? 1 : 0,
+        width: 'calc(100vw - 40px)',
+        maxWidth: '320px',
       }}
     >
       <div
+        className="glass"
         style={{
             position: 'relative',
-            width: '320px',
-            // Dark Graphite Surface
-            background: '#27272a', 
-            borderRadius: '12px',
-            border: '1px solid #3f3f46',
-            boxShadow: '0 2px 6px 2px rgba(0, 0, 0, 0.15)',
+            width: '100%',
+            borderRadius: '20px',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
             padding: '24px',
-            fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            color: '#f4f4f5'
+            fontFamily: 'inherit',
+            color: 'var(--text-primary)'
         }}
       >
         
@@ -88,19 +88,19 @@ export default function ProfilePopup({ isOpen, onClose }) {
         
             <h2 style={{
                 margin: '0',
-                fontSize: '20px',
-                fontWeight: 500,
-                color: '#f4f4f5',
-                letterSpacing: '-0.3px',
+                fontSize: '22px',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.5px',
                 textAlign: 'center'
             }}>
                Phaneendhar Nittala
             </h2>
             <p style={{
-                margin: '4px 0 0',
-                fontSize: '13px',
-                fontWeight: 400,
-                color: '#a1a1aa', 
+                margin: '6px 0 0',
+                fontSize: '14px',
+                fontWeight: 500,
+                color: 'var(--text-secondary)', 
                 textAlign: 'center'
             }}>
                 Developer & Forensic Science Graduate
@@ -109,10 +109,11 @@ export default function ProfilePopup({ isOpen, onClose }) {
 
         {/* Content List */}
         <div style={{
-            background: '#18181b', 
-            borderRadius: '4px',
+            background: 'rgba(0,0,0,0.3)', 
+            borderRadius: '12px',
             overflow: 'hidden',
-            marginBottom: '24px'
+            marginBottom: '24px',
+            border: '1px solid var(--glass-border)'
         }}>
             <div style={itemStyle}>
                 <span style={labelStyle}>Education</span>
@@ -122,7 +123,6 @@ export default function ProfilePopup({ isOpen, onClose }) {
                 <span style={labelStyle}>University</span>
                 <span style={valueStyle}>Centurion University of Technology and Management</span>
             </div>
-
         </div>
 
         {/* Connect Section */}

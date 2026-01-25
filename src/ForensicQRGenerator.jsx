@@ -513,43 +513,40 @@ END OF RECORD`.trim();
         WebkitFontSmoothing: "antialiased",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 850, overflowX: "hidden" }} className="mobile-padding">
+      <div style={{ width: "100%", maxWidth: 850 }}>
         {/* TOP BAR */}
         <div style={{
-          padding: "20px 0",
+          padding: "30px 0",
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          marginBottom: '20px',
+          marginBottom: '30px',
           position: 'relative',
-          gap: '20px',
-          width: "100%"
-        }} className="mobile-stack">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', maxWidth: "100%" }}>
+          gap: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <img 
               src={phanixLogo} 
               alt="PHANIX" 
               style={{ 
-                width: '40px', 
-                height: '40px', 
-                flexShrink: 0,
+                width: '45px', 
+                height: '45px', 
                 borderRadius: '50%',
                 boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
-                border: `2px solid var(--accent)`
+                border: `2px solid ${accent}`
               }} 
             />
             <span style={{
               position: 'relative',
               zIndex: 1,
-              color: "var(--text-primary)",
+              color: "#f4f4f5",
               fontWeight: 800,
-              fontSize: 18,
-              letterSpacing: 1,
+              fontSize: 24,
+              letterSpacing: 2,
               fontFamily: 'inherit',
-              textShadow: '0 0 15px rgba(59, 130, 246, 0.3)',
-              wordBreak: "break-word"
-            }} className="mobile-text-center">
-              FORENSIC QR ARCHITECT
+              textShadow: '0 0 15px rgba(59, 130, 246, 0.3)'
+            }}>
+              FORENSIC-QR-ARCHITECT
             </span>
           </div>
           
@@ -557,13 +554,13 @@ END OF RECORD`.trim();
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              borderLeft: '1px solid var(--glass-border)',
+              borderLeft: '1px solid #3f3f46',
               paddingLeft: '20px',
               height: '42px'
-          }} className="mobile-hide">
+          }}>
             <div style={{
                 fontSize: '11px',
-                color: 'var(--text-secondary)',
+                color: '#a1a1aa',
                 letterSpacing: '0.2px',
                 fontWeight: 400,
                 lineHeight: '1.2'
@@ -571,7 +568,7 @@ END OF RECORD`.trim();
                 Powered by
             </div>
             <div style={{
-                color: 'var(--accent)',
+                color: accent,
                 fontWeight: 700,
                 fontSize: '14px',
                 letterSpacing: '1px',
@@ -585,163 +582,174 @@ END OF RECORD`.trim();
 
         {/* HEADER */}
         <div
-          className="glass"
           style={{
             marginBottom: 30,
-            padding: "32px 24px",
-            borderRadius: "24px",
+            padding: 32,
+            ...materialCardStyle,
             position: "relative",
             zIndex: 50,
-            width: "100%",
-            textAlign: "center"
           }}
         >
-          <div style={{ 
-            display: "flex", 
-            flexDirection: "column",
-            alignItems: "center", 
-            marginBottom: 30, 
-            width: "100%",
-            gap: 12
-          }}>
-            <h1 style={{
-              margin: 0,
-              fontSize: 36,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              letterSpacing: "-1px"
-            }}>
-              PHANIX
-            </h1>
-            <p style={{ 
-              margin: 0, 
-              color: "var(--text-secondary)", 
-              fontSize: 16, 
-              maxWidth: 600, 
-              lineHeight: 1.6,
-              textAlign: "center"
-            }}>
-              <strong style={{ color: "var(--accent)" }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
-              Deploying advanced digital integrity protocols for the modern forensic workflow. 
-              Visit <span 
-                onClick={triggerIconPulse}
-                style={{ 
-                  color: "var(--accent)", 
-                  cursor: 'pointer', 
-                  textDecoration: 'none',
-                  borderBottom: `2px solid var(--accent)`,
-                  fontWeight: 700,
-                  transition: 'all 0.2s'
-                }}
-              >PHANIX</span> for more info.
-            </p>
-          </div>
 
-            <div style={{ 
-              display: 'flex', 
-              gap: '12px', 
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%'
-            }}>
-              {/* ABOUT PHANIX ICON */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30 }}>
+            <div>
+              <h1 style={{
+                margin: 0,
+                fontSize: 28,
+                fontWeight: 800,
+                letterSpacing: "2px",
+                color: "#f4f4f5",
+                background: `linear-gradient(to right, #ffffff, ${accent})`,
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent"
+              }}>
+                PHANIX
+              </h1>
+              <p style={{ margin: "8px 0 0", color: "#a1a1aa", fontSize: 16, maxWidth: 500, lineHeight: 1.6 }}>
+                <strong style={{ color: accent }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
+                Deploying advanced digital integrity protocols for the modern forensic workflow. 
+                Visit <span 
+                  onClick={triggerIconPulse}
+                  style={{ 
+                    color: accent, 
+                    cursor: 'pointer', 
+                    textDecoration: 'underline',
+                    fontWeight: 600,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = '#60a5fa'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = accent}
+                >PHANIX</span> for more info.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+
+               {/* i need to channge the link here ok  */}
+              {/* ABOUT PHANIX */}
               <a
                 ref={aboutIconRef}
                 href="https://nphaneendhar.github.io/phaneendhar-nittala-portfolio/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="glass"
                 style={{
-                  width: 48,
-                  height: 48,
+                  width: 44,
+                  height: 44,
                   borderRadius: "50%",
-                  color: "var(--text-primary)",
+                  background: isIconPulsing ? accent : "#3f3f46",
+                  border: isIconPulsing ? `2px solid white` : "none",
+                  color: "#f4f4f5",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  fontSize: 18,
                   transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
                   textDecoration: "none",
-                  background: isIconPulsing ? 'var(--accent)' : 'var(--bg-secondary)',
-                  border: isIconPulsing ? `2px solid white` : "1px solid var(--glass-border)",
-                  boxShadow: isIconPulsing ? `0 0 20px var(--accent)` : 'none',
+                  transform: isIconPulsing ? 'scale(1.2)' : 'scale(1)',
+                  boxShadow: isIconPulsing ? `0 0 20px ${accent}` : 'none',
+                  animation: isIconPulsing ? 'pulse 0.5s ease-in-out infinite' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = accent;
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#3f3f46";
+                  e.currentTarget.style.transform = 'scale(1)';
                 }}
                 title="About Phanix"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* UPGRADED PHANIX BRAND SIGNATURE */}
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M7 21V3H14C16.2091 3 18 4.79086 18 7C18 9.20914 16.2091 11 14 11H7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   <path d="M15 3C15 3 19 3 20 6C21 9 18 11 18 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <circle cx="12" cy="7" r="1.5" fill="var(--accent)" />
+                  <circle cx="12" cy="7" r="1.5" fill={accent} />
+                  <path d="M3 3L5 5" stroke={accent} strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </a>
 
-              {/* PROFILE TRIGGER */}
-              <button
-                className="glass"
-                onClick={() => setIsProfileOpen(true)}
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  background: "var(--bg-secondary)",
-                  border: "1px solid var(--glass-border)",
-                  color: "var(--text-primary)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 0
-                }}
+              {/* PROFILE AREA - Hover to show popup */}
+              <div
+                style={{ position: 'relative', zIndex: 100, paddingBottom: 20 }}
+                onMouseEnter={() => setIsProfileOpen(true)}
+                onMouseLeave={() => setIsProfileOpen(false)}
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(59, 130, 246, 0.1)" stroke="var(--accent)"/>
-                  <circle cx="12" cy="11" r="3" stroke="var(--accent)" strokeWidth="1.5" />
-                  <line x1="12" y1="8" x2="12" y2="8" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-              </button>
+                <button
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: "50%",
+                    background: "#3f3f46",
+                    border: "none",
+                    color: "#f4f4f5",
+                    cursor: "default",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 18,
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#52525b";
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "#3f3f46";
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  {/* HIGH-TECH FORENSIC EXPERT BADGE */}
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(59,130,246,0.2)" stroke={accent}/>
+                    <circle cx="12" cy="11" r="3" stroke={accent} strokeWidth="1.5" />
+                    <path d="M7 16V16.5C7 18.5 12 20 12 20C12 20 17 18.5 17 16.5V16" stroke={accent} strokeWidth="1.5" />
+                    <line x1="12" y1="8" x2="12" y2="8" stroke={accent} strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                </button>
 
-              <ProfilePopup
-                isOpen={isProfileOpen}
-                onClose={() => setIsProfileOpen(false)}
-              />
+                <ProfilePopup
+                  isOpen={isProfileOpen}
+                  onClose={() => setIsProfileOpen(false)}
+                />
+              </div>
             </div>
           </div>
 
           <div style={{
             marginTop: 30,
             padding: "20px",
-            background: "rgba(0,0,0,0.4)",
-            borderRadius: "16px",
-            border: "1px solid var(--glass-border)",
+            background: "#18181b",
+            borderRadius: "8px",
+            border: "1px solid #3f3f46",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: "15px",
-            width: "100%"
+            gap: "15px"
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ 
                     width: '36px', 
                     height: '36px', 
-                    borderRadius: '8px', 
-                    background: 'var(--accent)', 
+                    borderRadius: '6px', 
+                    background: 'rgba(59, 130, 246, 0.15)', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    color: "white",
+                    color: accent,
                     fontSize: '16px',
-                    fontWeight: 800
+                    fontWeight: 700
                 }}>
                     P
                 </div>
                 <div>
-                    <h3 style={{ margin: "0 0 2px", fontSize: 14, color: "var(--text-primary)", fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        Phaneendhar Expert
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
+                    <h3 style={{ margin: "0 0 2px", fontSize: 14, color: "#f4f4f5", fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Phaneendhar Investigation Expert
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
                     </h3>
-                    <p style={{ margin: 0, fontSize: 13, color: "var(--text-secondary)" }}>
-                        Advanced tools for forensic integrity.
+                    <p style={{ margin: 0, fontSize: 13, color: "#a1a1aa" }}>
+                        Advanced tools for helping forensic integrity.
                     </p>
                 </div>
             </div>
@@ -750,17 +758,30 @@ END OF RECORD`.trim();
               href="https://p-h-a-n-i-x-investigation-e-xpert.vercel.app/"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-primary"
               style={{
-                padding: "10px 20px",
-                borderRadius: "12px",
-                fontSize: 14,
-                fontWeight: 600,
-                width: window.innerWidth < 480 ? "100%" : "auto"
+                padding: "8px 20px",
+                borderRadius: "6px",
+                background: accent,
+                border: "none",
+                color: "white",
+                fontSize: 13,
+                fontWeight: 500,
+                textDecoration: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#2563eb";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = accent;
               }}
             >
               <span>Launch Suite</span>
-              <span style={{ fontSize: "1.2em" }}>→</span>
+              <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>→</span>
             </a>
           </div>
         </div>
@@ -768,13 +789,13 @@ END OF RECORD`.trim();
         {/* TABS */}
         {tab !== "viewer" && (
           <div
-          className="glass"
           style={{
             display: "flex",
-            padding: "4px",
-            borderRadius: "14px",
+            background: "transparent",
+            padding: "0 0 10px 0",
+            borderBottom: "1px solid #3f3f46",
             marginBottom: 30,
-            gap: "4px",
+            gap: 10
           }}
         >
           {["generator", "scanner", "insights"].map((t) => (
@@ -782,19 +803,18 @@ END OF RECORD`.trim();
               key={t}
               onClick={() => setTab(t)}
               style={{
-                flex: 1,
-                padding: "10px",
-                borderRadius: "10px",
+                padding: "8px 24px",
+                borderRadius: "18px",
                 border: "none",
-                background: tab === t ? "var(--accent)" : "transparent",
-                color: tab === t ? "white" : "var(--text-secondary)",
-                fontWeight: 600,
-                fontSize: 13,
+                background: tab === t ? accent : "transparent",
+                color: tab === t ? "white" : "#a1a1aa",
+                fontWeight: 500,
+                fontSize: 14,
                 cursor: "pointer",
-                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                transition: "all 0.3s ease",
               }}
             >
-              {t === "generator" ? "Generate" : t === "scanner" ? "Scan" : "Insights"}
+              {t === "generator" ? "Evidence Generator" : t === "scanner" ? "QR Scanner" : "Forensic Insights"}
             </button>
           ))}
           </div>
@@ -802,9 +822,8 @@ END OF RECORD`.trim();
 
         {/* GENERATOR */}
         {tab === "generator" && (
-          <div style={{ animation: "slideUp 0.5s ease" }}>
+          <div style={{ animation: "fadeIn 0.5s ease" }}>
             <div
-              className="mobile-stack"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
@@ -813,64 +832,99 @@ END OF RECORD`.trim();
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label style={{ fontSize: 13, fontWeight: "600", color: "var(--text-secondary)", marginLeft: 4 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "500",
+                    color: "#a1a1aa",
+                    marginBottom: 4,
+                    display: 'block'
+                  }}
+                >
                   OPERATOR NAME
                 </label>
                 <input
-                  placeholder="Enter operator name"
+                  placeholder="e.g. simplely add your name "
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="glass"
                   style={{
-                    padding: "14px 18px",
-                    borderRadius: 14,
-                    color: "var(--text-primary)",
+                    padding: "12px 16px",
+                    borderRadius: 4,
+                    background: "transparent",
+                    border: "1px solid #52525b",
+                    color: "#f4f4f5",
                     outline: "none",
-                    fontSize: 16,
-                    background: "rgba(0,0,0,0.4)"
+                    fontSize: 14,
+                    transition: "all 0.2s",
                   }}
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label style={{ fontSize: 13, fontWeight: "600", color: "var(--text-secondary)", marginLeft: 4 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "500",
+                    color: "#a1a1aa",
+                    marginBottom: 4,
+                    display: 'block'
+                  }}
+                >
                   BADGE ID
                 </label>
                 <input
-                  placeholder="ID Number"
+                  placeholder="e.g.   make sure it is your badge id "
                   value={badge}
                   onChange={(e) => setBadge(e.target.value)}
-                  className="glass"
                   style={{
-                    padding: "14px 18px",
-                    borderRadius: 14,
-                    color: "var(--text-primary)",
+                    padding: "12px 16px",
+                    borderRadius: 4,
+                    background: "transparent",
+                    border: "1px solid #52525b",
+                    color: "#f4f4f5",
                     outline: "none",
-                    fontSize: 16,
-                    background: "rgba(0,0,0,0.4)"
+                    fontSize: 14,
+                    transition: "all 0.2s",
                   }}
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label style={{ fontSize: 13, fontWeight: "600", color: "var(--text-secondary)", marginLeft: 4 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "500",
+                    color: "#a1a1aa",
+                    marginBottom: 4,
+                    display: 'block'
+                  }}
+                >
                   ROLE
                 </label>
                 <input
-                  placeholder="e.g. Senior Investigator"
+                  placeholder="e.g. Senior Investigator if you are or write differnet "
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="glass"
                   style={{
-                    padding: "14px 18px",
-                    borderRadius: 14,
-                    color: "var(--text-primary)",
+                    padding: "12px 16px",
+                    borderRadius: 4,
+                    background: "transparent",
+                    border: "1px solid #52525b",
+                    color: "#f4f4f5",
                     outline: "none",
-                    fontSize: 16,
-                    background: "rgba(0,0,0,0.4)"
+                    fontSize: 14,
+                    transition: "all 0.2s",
                   }}
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label style={{ fontSize: 13, fontWeight: "600", color: "var(--text-secondary)", marginLeft: 4 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "500",
+                    color: "#a1a1aa",
+                    marginBottom: 4,
+                    display: 'block'
+                  }}
+                >
                   EVIDENCE TAKEN FROM
                 </label>
                 
@@ -884,33 +938,35 @@ END OF RECORD`.trim();
                       }}
                       onFocus={() => setIsLocationOpen(true)}
                       onBlur={() => setTimeout(() => setIsLocationOpen(false), 200)}
-                      className="glass"
                       style={{
-                        padding: "14px 18px",
-                        borderRadius: 14,
-                        color: "var(--text-primary)",
+                        padding: "12px 16px",
+                        borderRadius: 4,
+                        background: "#18181b",
+                        border: "1px solid #52525b",
+                        color: "#f4f4f5",
                         outline: "none",
-                        fontSize: 16,
+                        fontSize: 14,
+                        transition: "all 0.2s",
                         width: "100%",
-                        background: "rgba(0,0,0,0.4)"
+                        boxSizing: "border-box"
                       }}
                     />
-                    <div style={{ position: 'absolute', right: 18, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-secondary)', fontSize: 12 }}>▼</div>
+                    <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a1a1aa', fontSize: 10 }}>▼</div>
                     
                     {isLocationOpen && (
-                        <div 
-                          className="glass"
-                          style={{
+                        <div style={{
                             position: 'absolute',
                             top: '100%',
                             left: 0,
                             right: 0,
-                            borderRadius: '14px',
-                            marginTop: '8px',
+                            background: '#27272a',
+                            border: '1px solid #3f3f46',
+                            borderRadius: '4px',
+                            marginTop: '4px',
                             maxHeight: '200px',
                             overflowY: 'auto',
                             zIndex: 1000,
-                            boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
                         }}>
                             {EVIDENCE_LOCATIONS.filter(loc => 
                                 !evidenceSource || loc.toLowerCase().includes(evidenceSource.toLowerCase())
@@ -924,25 +980,28 @@ END OF RECORD`.trim();
                                         setLocationDetails("");
                                     }}
                                     style={{
-                                        padding: '12px 18px',
+                                        padding: '10px 12px',
                                         cursor: 'pointer',
-                                        fontSize: '15px',
-                                        color: 'var(--text-primary)',
-                                        borderBottom: '1px solid var(--glass-border)'
+                                        fontSize: '14px',
+                                        color: '#f4f4f5',
+                                        borderBottom: '1px solid #3f3f46'
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = '#3f3f46'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                 >
                                     {loc}
                                 </div>
                             ))}
+                            {EVIDENCE_LOCATIONS.filter(loc => !evidenceSource || loc.toLowerCase().includes(evidenceSource.toLowerCase())).length === 0 && (
+                                <div style={{ padding: '10px 12px', fontSize: 13, color: '#71717a' }}>No presets found. Using custom value.</div>
+                            )}
                         </div>
                     )}
                 </div>
 
                 {evidenceSource && (
-                  <div style={{ animation: "slideUp 0.3s ease", marginTop: 12 }}>
-                      <label style={{ fontSize: 12, color: "var(--accent)", fontWeight: 700, marginBottom: 6, display: 'block', letterSpacing: 0.5, marginLeft: 4 }}>
+                  <div style={{ animation: "fadeIn 0.3s ease", marginTop: 8 }}>
+                      <label style={{ fontSize: 10, color: accent, fontWeight: 600, marginBottom: 4, display: 'block', letterSpacing: 0.5 }}>
                         {evidenceSource === "Police Station" ? "STATION DETAILS" : 
                          evidenceSource === "Other" ? "SPECIFY LOCATION" : 
                          `DETAILS FOR ${evidenceSource.toUpperCase()}`}
@@ -960,17 +1019,17 @@ END OF RECORD`.trim();
                             e.target.style.height = "auto";
                             e.target.style.height = `${e.target.scrollHeight}px`;
                           }}
-                          className="glass"
                           style={{
-                            padding: "14px 18px",
-                            paddingRight: "45px",
-                            borderRadius: 14,
-                            background: "rgba(0, 113, 227, 0.05)",
-                            border: `2px solid var(--accent)`,
-                            color: "var(--text-primary)",
+                            padding: "12px 16px",
+                            paddingRight: "35px",
+                            borderRadius: 4,
+                            background: "rgba(59, 130, 246, 0.1)",
+                            border: `1px solid ${accent}`,
+                            color: "#f4f4f5",
                             outline: "none",
-                            fontSize: 16,
+                            fontSize: 14,
                             width: "100%",
+                            boxSizing: "border-box",
                             minHeight: "80px",
                             resize: "none",
                             overflow: "hidden",
@@ -1017,9 +1076,14 @@ END OF RECORD`.trim();
               {sections.map((s, i) => (
                 <div
                   key={i}
-                  className="glass"
                   style={{
-                    borderRadius: "16px",
+                    ...materialCardStyle,
+                    background:
+                      expandedIndex === i
+                        ? "#27272a"
+                        : "#27272a",
+                    borderRadius: 8,
+                    border: "none",
                     overflow: "hidden",
                     transition: "all 0.3s ease",
                   }}
@@ -1029,27 +1093,32 @@ END OF RECORD`.trim();
                       setExpandedIndex(expandedIndex === i ? -1 : i)
                     }
                     style={{
-                      padding: "16px 20px",
+                      padding: 15,
                       display: "flex",
                       alignItems: "center",
                       cursor: "pointer",
-                      background: expandedIndex === i ? "var(--bg-tertiary)" : "transparent",
+                      background:
+                        expandedIndex === i
+                          ? "#3f3f46"
+                          : "transparent",
                     }}
                   >
                     <div
                       style={{
-                        width: 28,
-                        height: 28,
+                        width: 24,
+                        height: 24,
                         borderRadius: "50%",
-                        background: expandedIndex === i ? "var(--accent)" : "var(--bg-secondary)",
+                        background:
+                          expandedIndex === i
+                            ? accent
+                            : "#18181b",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontSize: 13,
-                        fontWeight: "700",
-                        marginRight: 15,
+                        fontSize: 12,
+                        fontWeight: "bold",
+                        marginRight: 12,
                         color: "white",
-                        transition: "all 0.2s"
                       }}
                     >
                       {i + 1}
@@ -1094,7 +1163,7 @@ END OF RECORD`.trim();
                   </div>
 
                   {expandedIndex === i && (
-                    <div style={{ padding: "0 20px 20px 20px" }}>
+                    <div style={{ padding: "0 15px 15px 15px" }}>
                       <textarea
                         placeholder="Enter detailed findings, serial numbers, or observations..."
                         value={s.content}
@@ -1103,18 +1172,18 @@ END OF RECORD`.trim();
                           n[i].content = e.target.value;
                           setSections(n);
                         }}
-                        className="glass"
                         style={{
                           width: "100%",
-                          padding: 18,
-                          height: 120,
-                          borderRadius: 12,
-                          color: "var(--text-primary)",
+                          padding: 15,
+                          height: 100,
+                          background: "#18181b",
+                          border: "1px solid #52525b",
+                          borderRadius: 4,
+                          color: "#f4f4f5",
                           resize: "vertical",
                           outline: "none",
                           fontFamily: "monospace",
-                          fontSize: 14,
-                          background: "rgba(0,0,0,0.4)"
+                          boxSizing: "border-box",
                         }}
                       />
                     </div>
@@ -1128,15 +1197,15 @@ END OF RECORD`.trim();
               style={{
                 marginTop: 15,
                 width: "100%",
-                padding: "14px",
-                borderRadius: 14,
-                background: "var(--bg-secondary)",
-                color: "var(--accent)",
-                fontSize: 15,
-                fontWeight: 600,
+                padding: "10px",
+                borderRadius: 24,
+                border: "1px solid #52525b",
+                background: "transparent",
+                color: accent,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                fontSize: 14,
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
             >
               + Add Evidence Section
             </button>
@@ -1157,19 +1226,21 @@ END OF RECORD`.trim();
                   ⚠️ {validationError}
                 </div>
               )}
-              <div style={{ display: 'flex', gap: '15px' }} className="mobile-stack">
+              <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={clearForm}
                 disabled={loading}
                 style={{
                   flex: 1,
-                  padding: "16px",
-                  borderRadius: "14px",
-                  background: "var(--bg-secondary)",
-                  color: "var(--text-primary)",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  opacity: loading ? 0.5 : 1,
+                  padding: "10px 24px",
+                  borderRadius: "24px",
+                  background: "transparent",
+                  border: "1px solid #52525b",
+                  color: "#f4f4f5",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  transition: "all 0.2s ease",
                 }}
               >
                 CLEAR FORM
@@ -1177,15 +1248,30 @@ END OF RECORD`.trim();
               <button
                 onClick={generatePackage}
                 disabled={loading}
-                className="btn-primary"
                 style={{
                   flex: 2,
-                  padding: "16px",
-                  borderRadius: "14px",
-                  color: "black",
-                  fontSize: 15,
-                  fontWeight: 700,
-                  opacity: loading ? 0.7 : 1,
+                  padding: "10px 24px",
+                  borderRadius: "24px",
+                  background: loading ? "#3f3f46" : accent,
+                  border: "none",
+                  color: "white",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.boxShadow = "0 1px 3px 1px rgba(0,0,0,0.3)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.boxShadow = "none";
+                  }
                 }}
               >
                 {loading ? "PROCESSING..." : "GENERATE SECURE PACKAGE"}
@@ -1220,15 +1306,18 @@ END OF RECORD`.trim();
 
             {qrData && (
               <div
-                className="glass"
                 style={{
                   marginTop: 40,
-                  padding: "40px 20px",
-                  borderRadius: 24,
+                  background: "#ffffff",
+                  padding: 40,
+                  borderRadius: 20,
+                  color: "#1d1d1f",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  animation: "slideUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1)",
+                  animation: "popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+                  border: "1px solid rgba(0, 0, 0, 0.06)",
                 }}
               >
 
@@ -1236,27 +1325,26 @@ END OF RECORD`.trim();
 
 
                 {/* QR Code - Clean and Simple */}
-                <div 
-                  className="glass"
-                  style={{
-                    padding: "16px",
-                    borderRadius: "20px",
-                    background: "white",
-                  }}
-                >
+                <div style={{
+                  padding: "20px",
+                  background: "#ffffff",
+                  borderRadius: "16px",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+                }}>
+                  {/* Animated glow effect */}
+
+                  
                   <div ref={qrRef}>
                     <QRCodeCanvas 
                       value={qrData} 
                       level="M" 
-                      size={window.innerWidth < 480 ? 250 : 350} 
+                      size={350} 
                       bgColor="#ffffff" 
                       fgColor="#000000" 
                       includeMargin={true} 
                       style={{ 
-                        borderRadius: 12,
-                        display: "block",
-                        width: "100%",
-                        height: "auto"
+                        borderRadius: 8,
+                        display: "block"
                       }} 
                     />
                   </div>
@@ -1314,28 +1402,31 @@ END OF RECORD`.trim();
                 >
                   <button
                     onClick={saveQR}
-                    className="glass"
                     style={{
                       flex: 1,
-                      padding: "14px 16px",
-                      borderRadius: 14,
-                      color: "var(--text-primary)",
-                      fontWeight: 700,
-                      fontSize: 14
+                      padding: "8px 16px",
+                      borderRadius: 4,
+                      border: "1px solid #52525b",
+                      background: "transparent",
+                 
+                      color: "black",
+                      cursor: "pointer",
+                      fontWeight: 500,
                     }}
                   >
-                    Download
+                    Download QR
                   </button>
                   <button
                     onClick={copyReport}
-                    className="btn-primary"
                     style={{
                       flex: 1,
-                      padding: "14px 16px",
-                      borderRadius: 14,
-                      color: "white",
-                      fontWeight: 700,
-                      fontSize: 14
+                      padding: "8px 16px",
+                      borderRadius: 4,
+                      border: "none",
+                      background: accent,
+                      color: "black",
+                      cursor: "pointer",
+                      fontWeight: 500,
                     }}
                   >
                     Copy Data
@@ -1343,24 +1434,82 @@ END OF RECORD`.trim();
                 </div>
 
                 <div
-                  className="glass"
                   style={{
-                    marginTop: 24,
-                    padding: 20,
-                    borderRadius: 16,
+                    marginTop: 20,
+                    background: "#18181b",
+                    padding: 15,
+                    borderRadius: 4,
                     width: "100%",
+                    boxSizing: "border-box",
+                    overflowX: "auto",
                     textAlign: "left",
-                    background: "rgba(0,0,0,0.4)"
                   }}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: 1 }}>PACKAGE ID</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-primary)", marginBottom: 16, wordBreak: "break-all" }}>{manifest.id}</div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: "bold",
+                      color: "#a1a1aa",
+                      marginBottom: 4,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    PACKAGE ID
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: 12,
+                      color: "#f4f4f5",
+                      marginBottom: 12,
+                    }}
+                  >
+                    {manifest.id}
+                  </div>
 
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: 1 }}>TIMESTAMP</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-primary)", marginBottom: 16 }}>{manifest.timestamp}</div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: "bold",
+                      color: "#a1a1aa",
+                      marginBottom: 4,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    TIMESTAMP
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: 12,
+                      color: "#f4f4f5",
+                      marginBottom: 12,
+                    }}
+                  >
+                    {manifest.timestamp}
+                  </div>
 
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: 1 }}>INTEGRITY HASH</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--accent)", wordBreak: "break-all", fontWeight: 600 }}>{manifest.hash}</div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: "bold",
+                      color: "#a1a1aa",
+                      marginBottom: 4,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    INTEGRITY HASH
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: 12,
+                      color: accent,
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {manifest.hash}
+                  </div>
                 </div>
               </div>
             )}
@@ -1369,16 +1518,15 @@ END OF RECORD`.trim();
 
         {/* SCANNER */}
         {tab === "scanner" && (
-          <div style={{ animation: "slideUp 0.5s ease" }}>
-            <div 
-              className="glass"
-              style={{ 
-                padding: window.innerWidth < 768 ? "30px 20px" : "40px",
-                borderRadius: "24px",
-                position: "relative",
-                overflow: "hidden"
-              }}
-            >
+          <div style={{ animation: "fadeIn 0.5s ease" }}>
+            <div style={{ 
+              ...materialCardStyle, 
+              padding: 40,
+              background: "linear-gradient(135deg, #18181b 0%, #27272a 50%, #18181b 100%)",
+              border: "1px solid rgba(59, 130, 246, 0.2)",
+              position: "relative",
+              overflow: "hidden"
+            }}>
               {/* Decorative glow */}
               <div style={{
                 position: "absolute",

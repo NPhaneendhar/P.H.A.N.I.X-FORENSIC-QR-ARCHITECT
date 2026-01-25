@@ -624,7 +624,7 @@ END OF RECORD`.trim();
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
 
                {/* i need to channge the link here ok  */}
               {/* ABOUT PHANIX */}
@@ -633,13 +633,12 @@ END OF RECORD`.trim();
                 href="https://nphaneendhar.github.io/phaneendhar-nittala-portfolio/"
                 target="_blank"
                 rel="noopener noreferrer"
+                className="glass"
                 style={{
                   width: 44,
                   height: 44,
                   borderRadius: "50%",
-                  background: isIconPulsing ? accent : "#3f3f46",
-                  border: isIconPulsing ? `2px solid white` : "none",
-                  color: "#f4f4f5",
+                  color: "var(--text-primary)",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -648,64 +647,51 @@ END OF RECORD`.trim();
                   transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
                   textDecoration: "none",
                   transform: isIconPulsing ? 'scale(1.2)' : 'scale(1)',
-                  boxShadow: isIconPulsing ? `0 0 20px ${accent}` : 'none',
-                  animation: isIconPulsing ? 'pulse 0.5s ease-in-out infinite' : 'none'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = accent;
-                  e.currentTarget.style.transform = 'scale(1.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#3f3f46";
-                  e.currentTarget.style.transform = 'scale(1)';
+                  boxShadow: isIconPulsing ? `0 0 20px var(--accent)` : 'none',
+                  animation: isIconPulsing ? 'pulse 0.5s ease-in-out infinite' : 'none',
+                  background: isIconPulsing ? 'var(--accent)' : 'var(--bg-secondary)',
+                  border: isIconPulsing ? `2px solid white` : "1px solid var(--glass-border)",
                 }}
                 title="About Phanix"
               >
                 {/* UPGRADED PHANIX BRAND SIGNATURE */}
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M7 21V3H14C16.2091 3 18 4.79086 18 7C18 9.20914 16.2091 11 14 11H7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   <path d="M15 3C15 3 19 3 20 6C21 9 18 11 18 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <circle cx="12" cy="7" r="1.5" fill={accent} />
-                  <path d="M3 3L5 5" stroke={accent} strokeWidth="2" strokeLinecap="round" />
+                  <circle cx="12" cy="7" r="1.5" fill="var(--accent)" />
                 </svg>
               </a>
 
               {/* PROFILE AREA - Hover to show popup */}
               <div
-                style={{ position: 'relative', zIndex: 100, paddingBottom: 20 }}
+                style={{ position: 'relative', zIndex: 100 }}
                 onMouseEnter={() => setIsProfileOpen(true)}
                 onMouseLeave={() => setIsProfileOpen(false)}
               >
                 <button
+                  className="glass"
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
                   style={{
                     width: 44,
                     height: 44,
                     borderRadius: "50%",
-                    background: "#3f3f46",
-                    border: "none",
-                    color: "#f4f4f5",
-                    cursor: "default",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--glass-border)",
+                    color: "var(--text-primary)",
+                    cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 18,
                     transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#52525b";
-                    e.currentTarget.style.transform = 'scale(1.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "#3f3f46";
-                    e.currentTarget.style.transform = 'scale(1)';
+                    padding: 0
                   }}
                 >
                   {/* HIGH-TECH FORENSIC EXPERT BADGE */}
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(59,130,246,0.2)" stroke={accent}/>
-                    <circle cx="12" cy="11" r="3" stroke={accent} strokeWidth="1.5" />
-                    <path d="M7 16V16.5C7 18.5 12 20 12 20C12 20 17 18.5 17 16.5V16" stroke={accent} strokeWidth="1.5" />
-                    <line x1="12" y1="8" x2="12" y2="8" stroke={accent} strokeWidth="3" strokeLinecap="round" />
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(0,113,227,0.1)" stroke="var(--accent)"/>
+                    <circle cx="12" cy="11" r="3" stroke="var(--accent)" strokeWidth="1.5" />
+                    <line x1="12" y1="8" x2="12" y2="8" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
                   </svg>
                 </button>
 
@@ -837,6 +823,7 @@ END OF RECORD`.trim();
                     color: "var(--text-primary)",
                     outline: "none",
                     fontSize: 16,
+                    background: "rgba(0,0,0,0.4)"
                   }}
                 />
               </div>
@@ -855,6 +842,7 @@ END OF RECORD`.trim();
                     color: "var(--text-primary)",
                     outline: "none",
                     fontSize: 16,
+                    background: "rgba(0,0,0,0.4)"
                   }}
                 />
               </div>
@@ -873,6 +861,7 @@ END OF RECORD`.trim();
                     color: "var(--text-primary)",
                     outline: "none",
                     fontSize: 16,
+                    background: "rgba(0,0,0,0.4)"
                   }}
                 />
               </div>
@@ -899,6 +888,7 @@ END OF RECORD`.trim();
                         outline: "none",
                         fontSize: 16,
                         width: "100%",
+                        background: "rgba(0,0,0,0.4)"
                       }}
                     />
                     <div style={{ position: 'absolute', right: 18, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-secondary)', fontSize: 12 }}>▼</div>
@@ -972,7 +962,7 @@ END OF RECORD`.trim();
                             paddingRight: "45px",
                             borderRadius: 14,
                             background: "rgba(0, 113, 227, 0.05)",
-                            border: `1px solid var(--accent)`,
+                            border: `2px solid var(--accent)`,
                             color: "var(--text-primary)",
                             outline: "none",
                             fontSize: 16,
@@ -1120,6 +1110,7 @@ END OF RECORD`.trim();
                           outline: "none",
                           fontFamily: "monospace",
                           fontSize: 14,
+                          background: "rgba(0,0,0,0.4)"
                         }}
                       />
                     </div>

@@ -592,42 +592,59 @@ END OF RECORD`.trim();
             borderRadius: "24px",
             position: "relative",
             zIndex: 50,
-            width: "100%"
+            width: "100%",
+            textAlign: "center"
           }}
         >
+          <div style={{ 
+            display: "flex", 
+            flexDirection: "column",
+            alignItems: "center", 
+            marginBottom: 30, 
+            width: "100%",
+            gap: 12
+          }}>
+            <h1 style={{
+              margin: 0,
+              fontSize: 36,
+              fontWeight: 800,
+              color: "var(--text-primary)",
+              letterSpacing: "-1px"
+            }}>
+              PHANIX
+            </h1>
+            <p style={{ 
+              margin: 0, 
+              color: "var(--text-secondary)", 
+              fontSize: 16, 
+              maxWidth: 600, 
+              lineHeight: 1.6,
+              textAlign: "center"
+            }}>
+              <strong style={{ color: "var(--accent)" }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
+              Deploying advanced digital integrity protocols for the modern forensic workflow. 
+              Visit <span 
+                onClick={triggerIconPulse}
+                style={{ 
+                  color: "var(--accent)", 
+                  cursor: 'pointer', 
+                  textDecoration: 'none',
+                  borderBottom: `2px solid var(--accent)`,
+                  fontWeight: 700,
+                  transition: 'all 0.2s'
+                }}
+              >PHANIX</span> for more info.
+            </p>
+          </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30, width: "100%" }} className="mobile-stack">
-            <div className="mobile-text-center" style={{ width: "100%" }}>
-              <h1 style={{
-                margin: 0,
-                fontSize: 32,
-                fontWeight: 800,
-                color: "var(--text-primary)",
-                letterSpacing: "-0.5px"
-              }}>
-                PHANIX
-              </h1>
-              <p style={{ margin: "12px 0 0", color: "var(--text-secondary)", fontSize: 16, maxWidth: 500, lineHeight: 1.6, marginLeft: "auto", marginRight: "auto" }}>
-                <strong style={{ color: "var(--text-primary)" }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
-                Deploying advanced digital integrity protocols for the modern forensic workflow. 
-                Visit <span 
-                  onClick={triggerIconPulse}
-                  style={{ 
-                    color: "var(--accent)", 
-                    cursor: 'pointer', 
-                    textDecoration: 'none',
-                    borderBottom: `2px solid var(--accent)`,
-                    fontWeight: 700,
-                    transition: 'all 0.2s'
-                  }}
-                >PHANIX</span> for more info.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-
-               {/* i need to channge the link here ok  */}
-              {/* ABOUT PHANIX */}
+            <div style={{ 
+              display: 'flex', 
+              gap: '12px', 
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%'
+            }}>
+              {/* ABOUT PHANIX ICON */}
               <a
                 ref={aboutIconRef}
                 href="https://nphaneendhar.github.io/phaneendhar-nittala-portfolio/"
@@ -635,26 +652,22 @@ END OF RECORD`.trim();
                 rel="noopener noreferrer"
                 className="glass"
                 style={{
-                  width: 44,
-                  height: 44,
+                  width: 48,
+                  height: 48,
                   borderRadius: "50%",
                   color: "var(--text-primary)",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 18,
                   transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
                   textDecoration: "none",
-                  transform: isIconPulsing ? 'scale(1.2)' : 'scale(1)',
-                  boxShadow: isIconPulsing ? `0 0 20px var(--accent)` : 'none',
-                  animation: isIconPulsing ? 'pulse 0.5s ease-in-out infinite' : 'none',
                   background: isIconPulsing ? 'var(--accent)' : 'var(--bg-secondary)',
                   border: isIconPulsing ? `2px solid white` : "1px solid var(--glass-border)",
+                  boxShadow: isIconPulsing ? `0 0 20px var(--accent)` : 'none',
                 }}
                 title="About Phanix"
               >
-                {/* UPGRADED PHANIX BRAND SIGNATURE */}
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M7 21V3H14C16.2091 3 18 4.79086 18 7C18 9.20914 16.2091 11 14 11H7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   <path d="M15 3C15 3 19 3 20 6C21 9 18 11 18 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -662,44 +675,35 @@ END OF RECORD`.trim();
                 </svg>
               </a>
 
-              {/* PROFILE AREA - Hover to show popup */}
-              <div
-                style={{ position: 'relative', zIndex: 100 }}
-                onMouseEnter={() => setIsProfileOpen(true)}
-                onMouseLeave={() => setIsProfileOpen(false)}
+              {/* PROFILE TRIGGER */}
+              <button
+                className="glass"
+                onClick={() => setIsProfileOpen(true)}
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--glass-border)",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0
+                }}
               >
-                <button
-                  className="glass"
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "50%",
-                    background: "var(--bg-secondary)",
-                    border: "1px solid var(--glass-border)",
-                    color: "var(--text-primary)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 18,
-                    transition: "all 0.2s",
-                    padding: 0
-                  }}
-                >
-                  {/* HIGH-TECH FORENSIC EXPERT BADGE */}
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(0,113,227,0.1)" stroke="var(--accent)"/>
-                    <circle cx="12" cy="11" r="3" stroke="var(--accent)" strokeWidth="1.5" />
-                    <line x1="12" y1="8" x2="12" y2="8" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
-                  </svg>
-                </button>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(59, 130, 246, 0.1)" stroke="var(--accent)"/>
+                  <circle cx="12" cy="11" r="3" stroke="var(--accent)" strokeWidth="1.5" />
+                  <line x1="12" y1="8" x2="12" y2="8" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+              </button>
 
-                <ProfilePopup
-                  isOpen={isProfileOpen}
-                  onClose={() => setIsProfileOpen(false)}
-                />
-              </div>
+              <ProfilePopup
+                isOpen={isProfileOpen}
+                onClose={() => setIsProfileOpen(false)}
+              />
             </div>
           </div>
 
@@ -1178,7 +1182,7 @@ END OF RECORD`.trim();
                   flex: 2,
                   padding: "16px",
                   borderRadius: "14px",
-                  color: "white",
+                  color: "black",
                   fontSize: 15,
                   fontWeight: 700,
                   opacity: loading ? 0.7 : 1,

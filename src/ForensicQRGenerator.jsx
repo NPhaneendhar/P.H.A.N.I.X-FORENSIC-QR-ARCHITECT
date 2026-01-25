@@ -513,39 +513,39 @@ END OF RECORD`.trim();
         WebkitFontSmoothing: "antialiased",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 850 }}>
+      <div style={{ width: "100%", maxWidth: 850 }} className="mobile-padding">
         {/* TOP BAR */}
         <div style={{
-          padding: "30px 0",
+          padding: "20px 0",
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          marginBottom: '30px',
+          marginBottom: '20px',
           position: 'relative',
           gap: '20px'
-        }}>
+        }} className="mobile-stack">
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <img 
               src={phanixLogo} 
               alt="PHANIX" 
               style={{ 
-                width: '45px', 
-                height: '45px', 
+                width: '40px', 
+                height: '40px', 
                 borderRadius: '50%',
                 boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
-                border: `2px solid ${accent}`
+                border: `2px solid var(--accent)`
               }} 
             />
             <span style={{
               position: 'relative',
               zIndex: 1,
-              color: "#f4f4f5",
+              color: "var(--text-primary)",
               fontWeight: 800,
-              fontSize: 24,
+              fontSize: 20,
               letterSpacing: 2,
               fontFamily: 'inherit',
               textShadow: '0 0 15px rgba(59, 130, 246, 0.3)'
-            }}>
+            }} className="mobile-text-center">
               FORENSIC-QR-ARCHITECT
             </span>
           </div>
@@ -554,13 +554,13 @@ END OF RECORD`.trim();
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              borderLeft: '1px solid #3f3f46',
+              borderLeft: '1px solid var(--glass-border)',
               paddingLeft: '20px',
               height: '42px'
-          }}>
+          }} className="mobile-hide">
             <div style={{
                 fontSize: '11px',
-                color: '#a1a1aa',
+                color: 'var(--text-secondary)',
                 letterSpacing: '0.2px',
                 fontWeight: 400,
                 lineHeight: '1.2'
@@ -568,7 +568,7 @@ END OF RECORD`.trim();
                 Powered by
             </div>
             <div style={{
-                color: accent,
+                color: 'var(--accent)',
                 fontWeight: 700,
                 fontSize: '14px',
                 letterSpacing: '1px',
@@ -582,43 +582,40 @@ END OF RECORD`.trim();
 
         {/* HEADER */}
         <div
+          className="glass"
           style={{
             marginBottom: 30,
             padding: 32,
-            ...materialCardStyle,
+            borderRadius: "24px",
             position: "relative",
             zIndex: 50,
           }}
         >
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30 }}>
-            <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30 }} className="mobile-stack">
+            <div className="mobile-text-center">
               <h1 style={{
                 margin: 0,
-                fontSize: 28,
+                fontSize: 32,
                 fontWeight: 800,
-                letterSpacing: "2px",
-                color: "#f4f4f5",
-                background: `linear-gradient(to right, #ffffff, ${accent})`,
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent"
+                color: "var(--text-primary)",
+                letterSpacing: "-0.5px"
               }}>
                 PHANIX
               </h1>
-              <p style={{ margin: "8px 0 0", color: "#a1a1aa", fontSize: 16, maxWidth: 500, lineHeight: 1.6 }}>
-                <strong style={{ color: accent }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
+              <p style={{ margin: "12px 0 0", color: "var(--text-secondary)", fontSize: 16, maxWidth: 500, lineHeight: 1.6 }}>
+                <strong style={{ color: "var(--accent)" }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
                 Deploying advanced digital integrity protocols for the modern forensic workflow. 
                 Visit <span 
                   onClick={triggerIconPulse}
                   style={{ 
-                    color: accent, 
+                    color: "var(--accent)", 
                     cursor: 'pointer', 
-                    textDecoration: 'underline',
+                    textDecoration: 'none',
+                    borderBottom: `1px solid var(--accent)`,
                     fontWeight: 600,
                     transition: 'all 0.2s'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = '#60a5fa'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = accent}
                 >PHANIX</span> for more info.
               </p>
             </div>
@@ -789,13 +786,13 @@ END OF RECORD`.trim();
         {/* TABS */}
         {tab !== "viewer" && (
           <div
+          className="glass"
           style={{
             display: "flex",
-            background: "transparent",
-            padding: "0 0 10px 0",
-            borderBottom: "1px solid #3f3f46",
+            padding: "4px",
+            borderRadius: "14px",
             marginBottom: 30,
-            gap: 10
+            gap: "4px",
           }}
         >
           {["generator", "scanner", "insights"].map((t) => (
@@ -803,18 +800,19 @@ END OF RECORD`.trim();
               key={t}
               onClick={() => setTab(t)}
               style={{
-                padding: "8px 24px",
-                borderRadius: "18px",
+                flex: 1,
+                padding: "10px",
+                borderRadius: "10px",
                 border: "none",
-                background: tab === t ? accent : "transparent",
-                color: tab === t ? "white" : "#a1a1aa",
-                fontWeight: 500,
-                fontSize: 14,
+                background: tab === t ? "var(--accent)" : "transparent",
+                color: tab === t ? "white" : "var(--text-secondary)",
+                fontWeight: 600,
+                fontSize: 13,
                 cursor: "pointer",
-                transition: "all 0.3s ease",
+                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
-              {t === "generator" ? "Evidence Generator" : t === "scanner" ? "QR Scanner" : "Forensic Insights"}
+              {t === "generator" ? "Generate" : t === "scanner" ? "Scan" : "Insights"}
             </button>
           ))}
           </div>
@@ -822,8 +820,9 @@ END OF RECORD`.trim();
 
         {/* GENERATOR */}
         {tab === "generator" && (
-          <div style={{ animation: "fadeIn 0.5s ease" }}>
+          <div style={{ animation: "slideUp 0.5s ease" }}>
             <div
+              className="mobile-stack"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
@@ -832,99 +831,61 @@ END OF RECORD`.trim();
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "500",
-                    color: "#a1a1aa",
-                    marginBottom: 4,
-                    display: 'block'
-                  }}
-                >
+                <label style={{ fontSize: 13, fontWeight: "600", color: "var(--text-secondary)", marginLeft: 4 }}>
                   OPERATOR NAME
                 </label>
                 <input
-                  placeholder="e.g. simplely add your name "
+                  placeholder="Enter operator name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  className="glass"
                   style={{
-                    padding: "12px 16px",
-                    borderRadius: 4,
-                    background: "transparent",
-                    border: "1px solid #52525b",
-                    color: "#f4f4f5",
+                    padding: "14px 18px",
+                    borderRadius: 14,
+                    color: "var(--text-primary)",
                     outline: "none",
-                    fontSize: 14,
-                    transition: "all 0.2s",
+                    fontSize: 16,
                   }}
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "500",
-                    color: "#a1a1aa",
-                    marginBottom: 4,
-                    display: 'block'
-                  }}
-                >
+                <label style={{ fontSize: 13, fontWeight: "600", color: "var(--text-secondary)", marginLeft: 4 }}>
                   BADGE ID
                 </label>
                 <input
-                  placeholder="e.g.   make sure it is your badge id "
+                  placeholder="ID Number"
                   value={badge}
                   onChange={(e) => setBadge(e.target.value)}
+                  className="glass"
                   style={{
-                    padding: "12px 16px",
-                    borderRadius: 4,
-                    background: "transparent",
-                    border: "1px solid #52525b",
-                    color: "#f4f4f5",
+                    padding: "14px 18px",
+                    borderRadius: 14,
+                    color: "var(--text-primary)",
                     outline: "none",
-                    fontSize: 14,
-                    transition: "all 0.2s",
+                    fontSize: 16,
                   }}
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "500",
-                    color: "#a1a1aa",
-                    marginBottom: 4,
-                    display: 'block'
-                  }}
-                >
+                <label style={{ fontSize: 13, fontWeight: "600", color: "var(--text-secondary)", marginLeft: 4 }}>
                   ROLE
                 </label>
                 <input
-                  placeholder="e.g. Senior Investigator if you are or write differnet "
+                  placeholder="e.g. Senior Investigator"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
+                  className="glass"
                   style={{
-                    padding: "12px 16px",
-                    borderRadius: 4,
-                    background: "transparent",
-                    border: "1px solid #52525b",
-                    color: "#f4f4f5",
+                    padding: "14px 18px",
+                    borderRadius: 14,
+                    color: "var(--text-primary)",
                     outline: "none",
-                    fontSize: 14,
-                    transition: "all 0.2s",
+                    fontSize: 16,
                   }}
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "500",
-                    color: "#a1a1aa",
-                    marginBottom: 4,
-                    display: 'block'
-                  }}
-                >
+                <label style={{ fontSize: 13, fontWeight: "600", color: "var(--text-secondary)", marginLeft: 4 }}>
                   EVIDENCE TAKEN FROM
                 </label>
                 
@@ -938,35 +899,32 @@ END OF RECORD`.trim();
                       }}
                       onFocus={() => setIsLocationOpen(true)}
                       onBlur={() => setTimeout(() => setIsLocationOpen(false), 200)}
+                      className="glass"
                       style={{
-                        padding: "12px 16px",
-                        borderRadius: 4,
-                        background: "#18181b",
-                        border: "1px solid #52525b",
-                        color: "#f4f4f5",
+                        padding: "14px 18px",
+                        borderRadius: 14,
+                        color: "var(--text-primary)",
                         outline: "none",
-                        fontSize: 14,
-                        transition: "all 0.2s",
+                        fontSize: 16,
                         width: "100%",
-                        boxSizing: "border-box"
                       }}
                     />
-                    <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a1a1aa', fontSize: 10 }}>▼</div>
+                    <div style={{ position: 'absolute', right: 18, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-secondary)', fontSize: 12 }}>▼</div>
                     
                     {isLocationOpen && (
-                        <div style={{
+                        <div 
+                          className="glass"
+                          style={{
                             position: 'absolute',
                             top: '100%',
                             left: 0,
                             right: 0,
-                            background: '#27272a',
-                            border: '1px solid #3f3f46',
-                            borderRadius: '4px',
-                            marginTop: '4px',
+                            borderRadius: '14px',
+                            marginTop: '8px',
                             maxHeight: '200px',
                             overflowY: 'auto',
                             zIndex: 1000,
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
                         }}>
                             {EVIDENCE_LOCATIONS.filter(loc => 
                                 !evidenceSource || loc.toLowerCase().includes(evidenceSource.toLowerCase())
@@ -980,28 +938,25 @@ END OF RECORD`.trim();
                                         setLocationDetails("");
                                     }}
                                     style={{
-                                        padding: '10px 12px',
+                                        padding: '12px 18px',
                                         cursor: 'pointer',
-                                        fontSize: '14px',
-                                        color: '#f4f4f5',
-                                        borderBottom: '1px solid #3f3f46'
+                                        fontSize: '15px',
+                                        color: 'var(--text-primary)',
+                                        borderBottom: '1px solid var(--glass-border)'
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = '#3f3f46'}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                 >
                                     {loc}
                                 </div>
                             ))}
-                            {EVIDENCE_LOCATIONS.filter(loc => !evidenceSource || loc.toLowerCase().includes(evidenceSource.toLowerCase())).length === 0 && (
-                                <div style={{ padding: '10px 12px', fontSize: 13, color: '#71717a' }}>No presets found. Using custom value.</div>
-                            )}
                         </div>
                     )}
                 </div>
 
                 {evidenceSource && (
-                  <div style={{ animation: "fadeIn 0.3s ease", marginTop: 8 }}>
-                      <label style={{ fontSize: 10, color: accent, fontWeight: 600, marginBottom: 4, display: 'block', letterSpacing: 0.5 }}>
+                  <div style={{ animation: "slideUp 0.3s ease", marginTop: 12 }}>
+                      <label style={{ fontSize: 12, color: "var(--accent)", fontWeight: 700, marginBottom: 6, display: 'block', letterSpacing: 0.5, marginLeft: 4 }}>
                         {evidenceSource === "Police Station" ? "STATION DETAILS" : 
                          evidenceSource === "Other" ? "SPECIFY LOCATION" : 
                          `DETAILS FOR ${evidenceSource.toUpperCase()}`}
@@ -1019,17 +974,17 @@ END OF RECORD`.trim();
                             e.target.style.height = "auto";
                             e.target.style.height = `${e.target.scrollHeight}px`;
                           }}
+                          className="glass"
                           style={{
-                            padding: "12px 16px",
-                            paddingRight: "35px",
-                            borderRadius: 4,
-                            background: "rgba(59, 130, 246, 0.1)",
-                            border: `1px solid ${accent}`,
-                            color: "#f4f4f5",
+                            padding: "14px 18px",
+                            paddingRight: "45px",
+                            borderRadius: 14,
+                            background: "rgba(0, 113, 227, 0.05)",
+                            border: `1px solid var(--accent)`,
+                            color: "var(--text-primary)",
                             outline: "none",
-                            fontSize: 14,
+                            fontSize: 16,
                             width: "100%",
-                            boxSizing: "border-box",
                             minHeight: "80px",
                             resize: "none",
                             overflow: "hidden",
@@ -1076,14 +1031,9 @@ END OF RECORD`.trim();
               {sections.map((s, i) => (
                 <div
                   key={i}
+                  className="glass"
                   style={{
-                    ...materialCardStyle,
-                    background:
-                      expandedIndex === i
-                        ? "#27272a"
-                        : "#27272a",
-                    borderRadius: 8,
-                    border: "none",
+                    borderRadius: "16px",
                     overflow: "hidden",
                     transition: "all 0.3s ease",
                   }}
@@ -1093,32 +1043,27 @@ END OF RECORD`.trim();
                       setExpandedIndex(expandedIndex === i ? -1 : i)
                     }
                     style={{
-                      padding: 15,
+                      padding: "16px 20px",
                       display: "flex",
                       alignItems: "center",
                       cursor: "pointer",
-                      background:
-                        expandedIndex === i
-                          ? "#3f3f46"
-                          : "transparent",
+                      background: expandedIndex === i ? "var(--bg-tertiary)" : "transparent",
                     }}
                   >
                     <div
                       style={{
-                        width: 24,
-                        height: 24,
+                        width: 28,
+                        height: 28,
                         borderRadius: "50%",
-                        background:
-                          expandedIndex === i
-                            ? accent
-                            : "#18181b",
+                        background: expandedIndex === i ? "var(--accent)" : "var(--bg-secondary)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontSize: 12,
-                        fontWeight: "bold",
-                        marginRight: 12,
+                        fontSize: 13,
+                        fontWeight: "700",
+                        marginRight: 15,
                         color: "white",
+                        transition: "all 0.2s"
                       }}
                     >
                       {i + 1}
@@ -1163,7 +1108,7 @@ END OF RECORD`.trim();
                   </div>
 
                   {expandedIndex === i && (
-                    <div style={{ padding: "0 15px 15px 15px" }}>
+                    <div style={{ padding: "0 20px 20px 20px" }}>
                       <textarea
                         placeholder="Enter detailed findings, serial numbers, or observations..."
                         value={s.content}
@@ -1172,18 +1117,17 @@ END OF RECORD`.trim();
                           n[i].content = e.target.value;
                           setSections(n);
                         }}
+                        className="glass"
                         style={{
                           width: "100%",
-                          padding: 15,
-                          height: 100,
-                          background: "#18181b",
-                          border: "1px solid #52525b",
-                          borderRadius: 4,
-                          color: "#f4f4f5",
+                          padding: 18,
+                          height: 120,
+                          borderRadius: 12,
+                          color: "var(--text-primary)",
                           resize: "vertical",
                           outline: "none",
                           fontFamily: "monospace",
-                          boxSizing: "border-box",
+                          fontSize: 14,
                         }}
                       />
                     </div>
@@ -1197,15 +1141,15 @@ END OF RECORD`.trim();
               style={{
                 marginTop: 15,
                 width: "100%",
-                padding: "10px",
-                borderRadius: 24,
-                border: "1px solid #52525b",
-                background: "transparent",
-                color: accent,
-                cursor: "pointer",
-                transition: "all 0.2s",
-                fontSize: 14,
+                padding: "14px",
+                borderRadius: 14,
+                background: "var(--bg-secondary)",
+                color: "var(--accent)",
+                fontSize: 15,
+                fontWeight: 600,
               }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
             >
               + Add Evidence Section
             </button>
@@ -1226,21 +1170,19 @@ END OF RECORD`.trim();
                   ⚠️ {validationError}
                 </div>
               )}
-              <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '15px' }} className="mobile-stack">
               <button
                 onClick={clearForm}
                 disabled={loading}
                 style={{
                   flex: 1,
-                  padding: "10px 24px",
-                  borderRadius: "24px",
-                  background: "transparent",
-                  border: "1px solid #52525b",
-                  color: "#f4f4f5",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: loading ? "not-allowed" : "pointer",
-                  transition: "all 0.2s ease",
+                  padding: "16px",
+                  borderRadius: "14px",
+                  background: "var(--bg-secondary)",
+                  color: "var(--text-primary)",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  opacity: loading ? 0.5 : 1,
                 }}
               >
                 CLEAR FORM
@@ -1248,30 +1190,15 @@ END OF RECORD`.trim();
               <button
                 onClick={generatePackage}
                 disabled={loading}
+                className="btn-primary"
                 style={{
                   flex: 2,
-                  padding: "10px 24px",
-                  borderRadius: "24px",
-                  background: loading ? "#3f3f46" : accent,
-                  border: "none",
+                  padding: "16px",
+                  borderRadius: "14px",
                   color: "white",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: loading ? "not-allowed" : "pointer",
-                  transition: "all 0.2s ease",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-                onMouseEnter={(e) => {
-                  if (!loading) {
-                    e.currentTarget.style.boxShadow = "0 1px 3px 1px rgba(0,0,0,0.3)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!loading) {
-                    e.currentTarget.style.boxShadow = "none";
-                  }
+                  fontSize: 15,
+                  fontWeight: 700,
+                  opacity: loading ? 0.7 : 1,
                 }}
               >
                 {loading ? "PROCESSING..." : "GENERATE SECURE PACKAGE"}
@@ -1306,18 +1233,15 @@ END OF RECORD`.trim();
 
             {qrData && (
               <div
+                className="glass"
                 style={{
                   marginTop: 40,
-                  background: "#ffffff",
-                  padding: 40,
-                  borderRadius: 20,
-                  color: "#1d1d1f",
+                  padding: "40px 20px",
+                  borderRadius: 24,
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1)",
-                  animation: "popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-                  border: "1px solid rgba(0, 0, 0, 0.06)",
+                  animation: "slideUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
                 }}
               >
 
@@ -1325,26 +1249,27 @@ END OF RECORD`.trim();
 
 
                 {/* QR Code - Clean and Simple */}
-                <div style={{
-                  padding: "20px",
-                  background: "#ffffff",
-                  borderRadius: "16px",
-                  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-                }}>
-                  {/* Animated glow effect */}
-
-                  
+                <div 
+                  className="glass"
+                  style={{
+                    padding: "16px",
+                    borderRadius: "20px",
+                    background: "white",
+                  }}
+                >
                   <div ref={qrRef}>
                     <QRCodeCanvas 
                       value={qrData} 
                       level="M" 
-                      size={350} 
+                      size={window.innerWidth < 480 ? 250 : 350} 
                       bgColor="#ffffff" 
                       fgColor="#000000" 
                       includeMargin={true} 
                       style={{ 
-                        borderRadius: 8,
-                        display: "block"
+                        borderRadius: 12,
+                        display: "block",
+                        width: "100%",
+                        height: "auto"
                       }} 
                     />
                   </div>
@@ -1402,19 +1327,16 @@ END OF RECORD`.trim();
                 >
                   <button
                     onClick={saveQR}
+                    className="glass"
                     style={{
                       flex: 1,
-                      padding: "8px 16px",
-                      borderRadius: 4,
-                      border: "1px solid #52525b",
-                      background: "transparent",
-                 
-                      color: "black",
-                      cursor: "pointer",
-                      fontWeight: 500,
+                      padding: "12px 16px",
+                      borderRadius: 12,
+                      color: "var(--text-primary)",
+                      fontWeight: 600,
                     }}
                   >
-                    Download QR
+                    Download
                   </button>
                   <button
                     onClick={copyReport}
@@ -1518,15 +1440,16 @@ END OF RECORD`.trim();
 
         {/* SCANNER */}
         {tab === "scanner" && (
-          <div style={{ animation: "fadeIn 0.5s ease" }}>
-            <div style={{ 
-              ...materialCardStyle, 
-              padding: 40,
-              background: "linear-gradient(135deg, #18181b 0%, #27272a 50%, #18181b 100%)",
-              border: "1px solid rgba(59, 130, 246, 0.2)",
-              position: "relative",
-              overflow: "hidden"
-            }}>
+          <div style={{ animation: "slideUp 0.5s ease" }}>
+            <div 
+              className="glass"
+              style={{ 
+                padding: window.innerWidth < 768 ? "30px 20px" : "40px",
+                borderRadius: "24px",
+                position: "relative",
+                overflow: "hidden"
+              }}
+            >
               {/* Decorative glow */}
               <div style={{
                 position: "absolute",

@@ -50,19 +50,40 @@ export default function ProfilePopup({ isOpen, onClose }) {
             marginBottom: '24px'
         }}>
              <div style={{
-                 width: '86px',
-                 height: '86px',
+                 width: '90px',
+                 height: '90px',
                  borderRadius: '50%',
-                 background: '#3f3f46', 
-                 border: 'none',
+                 background: 'linear-gradient(135deg, #18181b 0%, #27272a 100%)', 
+                 border: '2px solid #3b82f6',
                  display: 'flex',
                  alignItems: 'center',
                  justifyContent: 'center',
-                 fontSize: '38px',
                  marginBottom: '16px',
-                 boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                 boxShadow: '0 0 20px rgba(59, 130, 246, 0.2)',
+                 position: 'relative',
+                 overflow: 'hidden'
              }}>
-                 🥷
+                 {/* CUSTOM CYBER EXPERT ILLUSTRATION */}
+                 <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="8" r="4" stroke="#3b82f6" strokeWidth="1.5" />
+                    <path d="M12 14C8 14 5 16 5 19V20H19V19C19 16 16 14 12 14Z" stroke="#3b82f6" strokeWidth="1.5" />
+                    <path d="M9 8L11 10L15 6" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Electronic/Data Grains */}
+                    <circle cx="18" cy="5" r="1" fill="#3b82f6" opacity="0.6" />
+                    <circle cx="4" cy="12" r="1" fill="#3b82f6" opacity="0.4" />
+                    <circle cx="20" cy="15" r="1" fill="#3b82f6" opacity="0.5" />
+                 </svg>
+                 {/* HUD Overlay */}
+                 <div style={{
+                     position: 'absolute',
+                     top: 0,
+                     left: 0,
+                     right: 0,
+                     bottom: 0,
+                     border: '1px solid rgba(59, 130, 246, 0.1)',
+                     borderRadius: '50%',
+                     pointerEvents: 'none'
+                 }} />
              </div>
         
             <h2 style={{

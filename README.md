@@ -74,4 +74,4 @@ This project is optimized for deployment on Vercel.
 
 ---
 
-**Powered by Phani**
+**Powered by P.H.A.N.I.X**

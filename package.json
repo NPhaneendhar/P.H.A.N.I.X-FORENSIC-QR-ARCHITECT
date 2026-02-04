@@ -12,6 +12,7 @@
   "dependencies": {
     "@zxing/library": "^0.21.3",
     "crypto-js": "^4.2.0",
+    "jspdf": "^4.1.0",
     "jsqr": "^1.4.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",

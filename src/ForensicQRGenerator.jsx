@@ -6,6 +6,7 @@ import CryptoJS from "crypto-js";
 import { v4 as uuidv4 } from "uuid";
 import { BrowserMultiFormatReader } from "@zxing/library";
 import jsQR from "jsqr";
+import { jsPDF } from "jspdf";
 import phanixLogo from "./assets/phanix_logo.png";
 
 /**
@@ -277,6 +278,252 @@ END OF RECORD`.trim();
 
   const copyReport = () => {
     navigator.clipboard.writeText(qrData);
+  };
+
+  const downloadForensicReport = () => {
+    if (!analysisReport) return;
+    
+    const doc = new jsPDF();
+    const accentColor = [59, 130, 246]; // #3b82f6
+    const darkBg = [24, 24, 27]; // #18181b
+    const lightText = [244, 244, 245]; // #f4f4f5
+    const dimText = [161, 161, 170]; // #a1a1aa
+
+    // Page Background
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, 210, 297, 'F');
+
+    // Header Area
+    doc.setFillColor(...darkBg);
+    doc.rect(0, 0, 210, 45, 'F');
+    
+    // Header Accent Line
+    doc.setFillColor(...accentColor);
+    doc.rect(0, 45, 210, 2, 'F');
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(24);
+    doc.text("P.H.A.N.I.X", 20, 20);
+    
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "normal");
+    doc.text("FORENSIC EVIDENCE CERTIFICATE", 20, 30);
+    
+    // Status Badge
+    const statusText = analysisReport.trustStatus;
+    const isTrusted = statusText === 'TRUSTED SEAL';
+    doc.setFillColor(isTrusted ? 16 : 239, isTrusted ? 185 : 68, isTrusted ? 129 : 68);
+    doc.roundedRect(140, 15, 55, 12, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(statusText, 167.5, 23, { align: "center" });
+
+    // Certificate Meta
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(9);
+    doc.text(`CERTIFICATE ID: ${analysisReport.hash.substring(0, 12).toUpperCase()}`, 20, 55);
+    doc.text(`ISSUED ON: ${new Date().toLocaleString()}`, 20, 60);
+
+    // Main Content Section
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(15, 70, 180, 50, 4, 4, 'F');
+    
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("CORE INTEGRITY DATA", 25, 80);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(80, 80, 80);
+    doc.text("SHA-256 INTEGRITY HASH:", 25, 90);
+    doc.setFont("courier", "bold");
+    doc.setTextColor(0, 100, 0);
+    doc.text(analysisReport.hash, 25, 96, { maxWidth: 160 });
+    
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text(`SOURCE: ${analysisReport.source.replace(/_/g, ' ')}`, 25, 110);
+    doc.text(`TIMESTAMP: ${new Date(analysisReport.timestamp).toLocaleString()}`, 25, 115);
+
+    // Verification Checklist
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("VERIFICATION CHECKLIST", 25, 135);
+    
+    let yPos = 145;
+    analysisReport.checklist.forEach(item => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text(item.label, 32, yPos);
+      
+      const passed = item.status === 'PASS';
+      doc.setTextColor(passed ? 0 : 200, passed ? 150 : 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text(passed ? "PASSED" : "FAILED", 170, yPos, { align: "right" });
+      
+      doc.setFillColor(passed ? 0 : 200, passed ? 150 : 0, 0);
+      doc.circle(28, yPos - 1, 1, 'F');
+      
+      yPos += 8;
+    });
+
+    // Risk Indicators
+    yPos += 10;
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("FORENSIC INDICATORS", 25, yPos);
+    
+    yPos += 10;
+    analysisReport.indicators.forEach(ind => {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text(`- ${ind}`, 25, yPos, { maxWidth: 160 });
+      yPos += 6;
+    });
+
+    // Advisory Footer
+    doc.setFillColor(240, 244, 255);
+    doc.rect(0, 260, 210, 37, 'F');
+    doc.setFillColor(...accentColor);
+    doc.rect(0, 260, 210, 1, 'F');
+    
+    doc.setTextColor(...accentColor);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("DOCUMENT ADVISORY & EVIDENTIARY INTEGRITY", 20, 272);
+    
+    doc.setTextColor(100, 100, 100);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("This digital certificate serves as a cryptographic proof of integrity for the provided data payload. Any manual modification to this document after generation voids its forensic validity. Keep this file for further authentication within the P.H.A.N.I.X ecosystem.", 20, 278, { maxWidth: 170 });
+    
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    // Save PDF
+    doc.save(`Forensic_Certificate_${analysisReport.hash.substring(0, 8)}.pdf`);
+  };
+
+  const downloadCorruptionReport = (source) => {
+    const doc = new jsPDF();
+    const alertColor = [239, 68, 68]; // #ef4444
+    const darkBg = [24, 24, 27]; // #18181b
+    
+    // Page Background
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, 210, 297, 'F');
+
+    // Header Area
+    doc.setFillColor(...darkBg);
+    doc.rect(0, 0, 210, 45, 'F');
+    
+    // Header Accent Line
+    doc.setFillColor(...alertColor);
+    doc.rect(0, 45, 210, 2, 'F');
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(24);
+    doc.text("P.H.A.N.I.X", 20, 20);
+    
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "normal");
+    doc.text("FORENSIC ANALYSIS FAILURE REPORT", 20, 30);
+    
+    // Status Badge
+    doc.setFillColor(...alertColor);
+    doc.roundedRect(140, 15, 55, 12, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("QR CORRUPTED", 167.5, 23, { align: "center" });
+
+    // Meta
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(9);
+    doc.text(`REPORT ID: ERR_${Math.random().toString(36).substring(7).toUpperCase()}`, 20, 55);
+    doc.text(`ISSUED ON: ${new Date().toLocaleString()}`, 20, 60);
+
+    // Main Content Section
+    doc.setFillColor(254, 242, 242);
+    doc.roundedRect(15, 70, 180, 50, 4, 4, 'F');
+    
+    doc.setTextColor(153, 27, 27);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("ANALYSIS FAILURE DETAILS", 25, 80);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(185, 28, 28);
+    doc.text("REASON: Forensic Analysis Failure: QR pattern unreadable or corrupted.", 25, 90, { maxWidth: 160 });
+    
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(127, 29, 29);
+    doc.text(`SOURCE: ${source || "INTERNAL_SCAN"}`, 25, 110);
+    doc.text(`INTAKE TIMESTAMP: ${new Date().toLocaleString()}`, 25, 115);
+
+    // Scan Analysis Checklist (Simulated Failed)
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("SCAN ANALYSIS STATUS", 25, 135);
+    
+    let yPos = 145;
+    const items = [
+      { label: 'Pattern Detection', status: 'FAIL' },
+      { label: 'Data Extraction', status: 'FAIL' },
+      { label: 'Integrity Check', status: 'SKIP' }
+    ];
+    
+    items.forEach(item => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text(item.label, 32, yPos);
+      
+      const failed = item.status === 'FAIL';
+      doc.setTextColor(failed ? 200 : 100, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text(item.status, 170, yPos, { align: "right" });
+      
+      doc.setFillColor(failed ? 200 : 100, 0, 0);
+      doc.circle(28, yPos - 1, 1, 'F');
+      
+      yPos += 8;
+    });
+
+    // Advisory Footer
+    doc.setFillColor(254, 242, 242);
+    doc.rect(0, 260, 210, 37, 'F');
+    doc.setFillColor(...alertColor);
+    doc.rect(0, 260, 210, 1, 'F');
+    
+    doc.setTextColor(...alertColor);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("FORENSIC ADVISORY: EVIDENCE INTEGRITY FAILURE", 20, 272);
+    
+    doc.setTextColor(127, 29, 29);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("This document certifies that the provided evidence source could not be cryptographically validated. The QR code pattern is either damaged, incomplete, or malformed. This failure report should be attached to the incident file for documentation of non-extractable evidence.", 20, 278, { maxWidth: 170 });
+    
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(153, 27, 27);
+    doc.text("Certified by P.H.A.N.I.X - Automated Chain of Custody Validation.", 105, 292, { align: "center" });
+
+    // Save PDF
+    doc.save(`Forensic_Failure_Report_${new Date().getTime()}.pdf`);
   };
 
   const addSection = () => {
@@ -1822,6 +2069,41 @@ END OF RECORD`.trim();
                           ))}
                         </div>
                       </div>
+
+                      {/* Download Failure Report Button */}
+                      <button
+                        onClick={() => downloadCorruptionReport(isCameraActive ? "LIVE_CAMERA_SCAN" : "FORENSIC_IMAGE_INTAKE")}
+                        style={{
+                          width: '100%',
+                          marginTop: '24px',
+                          padding: '14px 24px',
+                          background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                          border: 'none',
+                          borderRadius: '12px',
+                          color: 'white',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '10px',
+                          boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)',
+                          transition: 'all 0.3s ease',
+                          letterSpacing: '0.5px',
+                          textTransform: 'uppercase'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.4)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 4px 15px rgba(239, 68, 68, 0.3)';
+                        }}
+                      >
+                        <span>⬇️</span> DOWNLOAD FAILURE REPORT
+                      </button>
                     </div>
                     
                     {/* Background watermark */}
@@ -2176,35 +2458,35 @@ END OF RECORD`.trim();
                   marginBottom: 10,
                   display: 'block'
                 }}>
-                  OR PASTE QR CONTENT MANUALLY
+                  SCANNED QR CONTENT
                 </label>
                 <textarea
-                  placeholder="Paste QR text content here for instant verification..."
+                  placeholder="Scanned QR content will appear here..."
                   value={scanInput}
-                  onChange={(e) => setScanInput(e.target.value)}
+                  readOnly
                   style={{
                     width: "100%",
                     height: 140,
                     padding: 16,
-                    background: "linear-gradient(135deg, #18181b 0%, #1f1f23 100%)",
-                    border: "1px solid #52525b",
+                    background: "linear-gradient(135deg, #121214 0%, #18181b 100%)",
+                    border: "1px solid #3f3f46",
                     borderRadius: 10,
                     color: "#f4f4f5",
                     fontFamily: "monospace",
                     fontSize: 13,
-                    resize: "vertical",
+                    resize: "none",
                     outline: "none",
                     boxSizing: "border-box",
                     marginBottom: 20,
-                    transition: 'all 0.3s'
+                    transition: 'all 0.3s',
+                    cursor: 'default',
+                    opacity: 0.9
                   }}
                   onFocus={(e) => {
-                    e.currentTarget.style.border = `1px solid ${accent}`;
-                    e.currentTarget.style.boxShadow = `0 0 20px rgba(59, 130, 246, 0.2)`;
+                    e.currentTarget.style.border = `1px solid ${accent}44`;
                   }}
                   onBlur={(e) => {
-                    e.currentTarget.style.border = '1px solid #52525b';
-                    e.currentTarget.style.boxShadow = 'none';
+                    e.currentTarget.style.border = '1px solid #3f3f46';
                   }}
                 />
 
@@ -2631,24 +2913,61 @@ END OF RECORD`.trim();
                       <div style={{ marginBottom: 20 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                           <div style={{ fontSize: 11, color: '#a1a1aa', fontWeight: 600, letterSpacing: '1.5px' }}>SHA-256 INTEGRITY HASH</div>
-                          <button 
-                            onClick={() => navigator.clipboard.writeText(analysisReport.hash)}
-                            style={{ 
-                              background: 'transparent', 
-                              border: 'none', 
-                              color: accent, 
-                              fontSize: 11, 
-                              cursor: 'pointer',
-                              fontWeight: 600,
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                          >
-                            COPY HASH
-                          </button>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button 
+                              onClick={() => navigator.clipboard.writeText(analysisReport.hash)}
+                              style={{ 
+                                background: 'transparent', 
+                                border: 'none', 
+                                color: accent, 
+                                fontSize: 11, 
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s',
+                                border: `1px solid ${accent}44`
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                                e.currentTarget.style.borderColor = accent;
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.borderColor = `${accent}44`;
+                              }}
+                            >
+                              COPY HASH
+                            </button>
+                            <button 
+                              onClick={downloadForensicReport}
+                              style={{ 
+                                background: accent, 
+                                border: 'none', 
+                                color: 'white', 
+                                fontSize: 11, 
+                                cursor: 'pointer',
+                                fontWeight: 700,
+                                padding: '4px 12px',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: `0 2px 8px ${accent}44`
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                e.currentTarget.style.boxShadow = `0 4px 12px ${accent}66`;
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = `0 2px 8px ${accent}44`;
+                              }}
+                            >
+                              <span>⬇️</span> DOWNLOAD REPORT
+                            </button>
+                          </div>
                         </div>
                         <div style={{ 
                           fontFamily: 'monospace', 
@@ -2673,13 +2992,30 @@ END OF RECORD`.trim();
                         gap: '20px', 
                         fontSize: 11, 
                         color: '#71717a',
-                        fontWeight: 500
+                        fontWeight: 500,
+                        alignItems: 'center'
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ color: accent }}>●</span> SOURCE: <span style={{ color: '#a1a1aa' }}>{analysisReport.source.replace(/_/g, ' ')}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ color: accent }}>●</span> TIMESTAMP: <span style={{ color: '#a1a1aa' }}>{new Date(analysisReport.timestamp).toLocaleString()}</span>
+                        </div>
+                        
+                        <div style={{ 
+                          marginLeft: 'auto',
+                          padding: '6px 12px',
+                          background: 'rgba(59, 130, 246, 0.05)',
+                          borderRadius: '8px',
+                          border: `1px solid ${accent}22`,
+                          fontSize: '10px',
+                          color: '#93c5fd',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span style={{ fontSize: '14px' }}>🛡️</span>
+                          <span><strong>ADVISORY:</strong> Keep this downloaded copy for further authentication.</span>
                         </div>
                       </div>
                    </div>

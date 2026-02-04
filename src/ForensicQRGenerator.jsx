@@ -61,6 +61,7 @@ export default function ForensicQRGenerator() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [videoDevices, setVideoDevices] = useState([]);
   const [selectedDeviceIndex, setSelectedDeviceIndex] = useState(0);
+  const [hasDefaultedCamera, setHasDefaultedCamera] = useState(false);
 
   /**
    * INTERACTIVE BRANDING LOGIC
@@ -145,6 +146,22 @@ export default function ForensicQRGenerator() {
         
         if (devices.length === 0) {
           throw new Error("No video devices discovered.");
+        }
+
+        // Auto-select back camera on first run
+        if (!hasDefaultedCamera && devices.length > 1) {
+          const backCameraIndex = devices.findIndex(device => 
+            device.label.toLowerCase().includes('back') || 
+            device.label.toLowerCase().includes('rear') ||
+            device.label.toLowerCase().includes('environment')
+          );
+          
+          if (backCameraIndex !== -1 && backCameraIndex !== selectedDeviceIndex) {
+            setSelectedDeviceIndex(backCameraIndex);
+            setHasDefaultedCamera(true);
+            return; // Effect will re-run with correct index
+          }
+           setHasDefaultedCamera(true);
         }
 
         // Validate index
@@ -1695,7 +1712,7 @@ END OF RECORD`.trim();
                   maxWidth: "100%",
                   textAlign: "center",
                   fontStyle: "italic",
-                  color: "#1e40af",
+                  color: "#01040cff",
                   fontSize: "14px",
                   lineHeight: "1.5"
                 }}>
@@ -1867,6 +1884,35 @@ END OF RECORD`.trim();
                 }}>
                   QR Evidence Scanner
                 </h2>
+                
+                {/* System Status Badge */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 12px',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  borderRadius: '20px',
+                  marginLeft: 'auto'
+                }}>
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#10b981',
+                    boxShadow: '0 0 8px #10b981'
+                  }} />
+                  <span style={{
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    color: '#6ee7b7',
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase'
+                  }}>
+                    SYSTEM OPERATIONAL
+                  </span>
+                </div>
               </div>
               
               <p style={{ 

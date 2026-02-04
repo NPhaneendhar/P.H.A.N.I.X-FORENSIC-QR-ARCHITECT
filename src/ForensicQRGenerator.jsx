@@ -1685,6 +1685,23 @@ END OF RECORD`.trim();
                   🔒 SHA-256 Cryptographically Signed & Timestamped
                 </p>
 
+                {/* Advisory Quote */}
+                <div style={{
+                  marginTop: "20px",
+                  padding: "12px 20px",
+                  background: "rgba(59, 130, 246, 0.05)",
+                  borderLeft: `4px solid ${accent}`,
+                  borderRadius: "4px",
+                  maxWidth: "100%",
+                  textAlign: "center",
+                  fontStyle: "italic",
+                  color: "#1e40af",
+                  fontSize: "14px",
+                  lineHeight: "1.5"
+                }}>
+                  "Please download the QR and use for the upload scan."
+                </div>
+
                 <div
                   style={{
                     display: "flex",

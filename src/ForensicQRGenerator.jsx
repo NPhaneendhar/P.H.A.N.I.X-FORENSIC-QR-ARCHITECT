@@ -59,7 +59,8 @@ export default function ForensicQRGenerator() {
   const [scanInput, setScanInput] = useState("");
   const [scanResult, setScanResult] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [cameraFacingMode, setCameraFacingMode] = useState("environment"); // Default to back camera
+  const [videoDevices, setVideoDevices] = useState([]);
+  const [selectedDeviceIndex, setSelectedDeviceIndex] = useState(0);
 
   /**
    * INTERACTIVE BRANDING LOGIC
@@ -133,36 +134,49 @@ export default function ForensicQRGenerator() {
 
     /**
      * CAMERA INITIALIZATION PIPELINE
-     * Attempting high-speed acquisition of video stream constraints.
+     * Enumerate devices and initialize the selected stream.
      */
-    let controlsPromise;
+    let controls;
     
-    controlsPromise = codeReaderRef.current.decodeFromConstraints(
-      { video: { facingMode: cameraFacingMode } },
-      videoRef.current,
-      (result, err) => {
-        if (result) {
-          const text = result.getText();
-          setScanInput(text);
-          processScan(text);
-          setIsCameraActive(false);
-          playBeep();
+    const startScanner = async () => {
+      try {
+        const devices = await codeReaderRef.current.listVideoInputDevices();
+        setVideoDevices(devices);
+        
+        if (devices.length === 0) {
+          throw new Error("No video devices discovered.");
         }
-      }
-    ).catch((err) => {
-      console.error("[FORENSIC_ERROR] Camera access denied or hardware failure.", err);
-      setIsCameraActive(false);
-      setValidationError("Camera access denied or unavailable. Check permissions.");
-    });
 
-    return () => {
-      if (controlsPromise) {
-        controlsPromise.then((controls) => {
-          if (controls) controls.stop();
-        }).catch(() => {});
+        // Validate index
+        const index = selectedDeviceIndex >= devices.length ? 0 : selectedDeviceIndex;
+        const deviceId = devices[index].deviceId;
+
+        controls = await codeReaderRef.current.decodeFromVideoDevice(
+          deviceId,
+          videoRef.current,
+          (result, err) => {
+            if (result) {
+              const text = result.getText();
+              setScanInput(text);
+              processScan(text);
+              setIsCameraActive(false);
+              playBeep();
+            }
+          }
+        );
+      } catch (err) {
+        console.error("[FORENSIC_ERROR] Camera initialization failed.", err);
+        setIsCameraActive(false);
+        setValidationError(err.message || "Camera access denied or unavailable.");
       }
     };
-  }, [isCameraActive, cameraFacingMode]);
+
+    startScanner();
+
+    return () => {
+      if (controls) controls.stop();
+    };
+  }, [isCameraActive, selectedDeviceIndex]);
 
   const generatePackage = async () => {
     if (!name.trim() || !badge.trim() || !role.trim() || !evidenceSource.trim()) {
@@ -2248,39 +2262,68 @@ END OF RECORD`.trim();
                     </div>
 
                     {/* Camera flip button */}
-                    <button
-                        onClick={() => setCameraFacingMode(prev => prev === "environment" ? "user" : "environment")}
-                        style={{
-                            position: 'absolute',
-                            top: 20,
-                            right: 20,
-                            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)',
-                            border: '1px solid rgba(255,255,255,0.3)',
-                            borderRadius: '50%',
-                            width: 48,
-                            height: 48,
-                            color: 'white',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 22,
-                            zIndex: 10,
-                            transition: 'all 0.3s',
-                            boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'scale(1.1)';
-                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'scale(1)';
-                          e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.3)';
-                        }}
-                        title="Switch Camera"
-                    >
-                        ↻
-                    </button>
+                    {videoDevices.length > 1 && (
+                      <button
+                          onClick={() => setSelectedDeviceIndex(prev => (prev + 1) % videoDevices.length)}
+                          style={{
+                              position: 'absolute',
+                              top: 20,
+                              right: 20,
+                              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)',
+                              border: '1px solid rgba(255,255,255,0.3)',
+                              borderRadius: '50%',
+                              width: 48,
+                              height: 48,
+                              color: 'white',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 22,
+                              zIndex: 10,
+                              transition: 'all 0.3s',
+                              boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.3)';
+                          }}
+                          title="Switch Camera"
+                      >
+                          ↻
+                      </button>
+                    )}
+
+                    {/* Camera Status Label */}
+                    {videoDevices.length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '75px',
+                        width: '100%',
+                        textAlign: 'center',
+                        pointerEvents: 'none',
+                        zIndex: 5
+                      }}>
+                        <div style={{
+                          display: 'inline-block',
+                          padding: '4px 12px',
+                          background: 'rgba(0,0,0,0.6)',
+                          backdropFilter: 'blur(4px)',
+                          borderRadius: '12px',
+                          color: 'rgba(255,255,255,0.8)',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          letterSpacing: '0.5px',
+                          textTransform: 'uppercase'
+                        }}>
+                          SOURCE: {videoDevices[selectedDeviceIndex]?.label || `CAMERA ${selectedDeviceIndex + 1}`}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Stop button */}
                     <button 

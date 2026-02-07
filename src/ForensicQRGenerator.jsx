@@ -939,7 +939,7 @@ END OF RECORD`.trim();
               {/* ABOUT PHANIX */}
               <a
                 ref={aboutIconRef}
-                href="https://nphaneendhar.github.io/phaneendhar-nittala-portfolio/"
+                href="https://p-h-a-n-i-x-phaneendhar-s-investigation-expert.vercel.app/"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{

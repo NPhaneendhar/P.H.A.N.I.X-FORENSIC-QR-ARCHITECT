@@ -1,6 +1,10 @@
 # P.H.A.N.I.X - Forensic QR Architect
 
 A professional forensic evidence management system with QR code generation and verification capabilities.
+**#Developers**
+UI designer = K.Bhashitha , Vasanttha.I
+#data base = Suresh.k
+#Tester =V.Chandra sekhar*****
 
 ## Features
 

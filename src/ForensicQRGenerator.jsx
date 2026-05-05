@@ -34,12 +34,49 @@ const EVIDENCE_LOCATIONS = [
   "Other"
 ];
 
+const FSL_DIVISIONS = [
+  "Digital Forensics",
+  "Cyber Forensics",
+  "Biology / DNA",
+  "Chemistry / Toxicology",
+  "Ballistics",
+  "Questioned Documents",
+  "Fingerprint Bureau",
+  "Crime Scene Unit",
+  "General Forensic Intake"
+];
+
+const SEAL_CONDITIONS = [
+  "Intact",
+  "Broken / Re-sealed",
+  "Partially damaged",
+  "Unsealed on receipt",
+  "Not applicable"
+];
+
+const PRIORITY_LEVELS = [
+  "Routine",
+  "Urgent",
+  "Court Priority",
+  "Re-examination",
+  "Supplementary Submission"
+];
+
+const urlPattern = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i;
+const ipUrl = /^(https?:\/\/)?((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(:\d+)?(\/\S*)?$/i;
+
 export default function ForensicQRGenerator() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [tab, setTab] = useState("generator");
   const [name, setName] = useState("");
   const [badge, setBadge] = useState("");
   const [role, setRole] = useState("");
+  const [caseNumber, setCaseNumber] = useState("");
+  const [exhibitNumber, setExhibitNumber] = useState("");
+  const [labDivision, setLabDivision] = useState("Digital Forensics");
+  const [receivingOfficer, setReceivingOfficer] = useState("");
+  const [sealCondition, setSealCondition] = useState("Intact");
+  const [priorityLevel, setPriorityLevel] = useState("Routine");
   const [evidenceSource, setEvidenceSource] = useState("");
   const [locationDetails, setLocationDetails] = useState("");
   const [isLocationOpen, setIsLocationOpen] = useState(false);
@@ -196,8 +233,8 @@ export default function ForensicQRGenerator() {
   }, [isCameraActive, selectedDeviceIndex]);
 
   const generatePackage = async () => {
-    if (!name.trim() || !badge.trim() || !role.trim() || !evidenceSource.trim()) {
-      setValidationError("Please fill in all required fields (Name, Badge ID, Role, Evidence Source).");
+    if (!name.trim() || !badge.trim() || !role.trim() || !caseNumber.trim() || !exhibitNumber.trim() || !evidenceSource.trim()) {
+      setValidationError("Please fill in all required fields (Name, Badge ID, Role, Case Number, Exhibit Number, Evidence Source).");
       return;
     }
     setValidationError("");
@@ -239,6 +276,12 @@ export default function ForensicQRGenerator() {
       op: name.trim(),
       bid: badge.trim(),
       role: role.trim(),
+      caseNo: caseNumber.trim(),
+      exhibitNo: exhibitNumber.trim(),
+      division: labDivision.trim(),
+      receivedBy: receivingOfficer.trim() || name.trim(),
+      seal: sealCondition.trim(),
+      priority: priorityLevel.trim(),
       src: finalEvidenceSource.trim(),
       uid: id,
       ts: timestamp,
@@ -254,6 +297,8 @@ export default function ForensicQRGenerator() {
      FORENSIC-QR-ARCHITECT
 ================================
 CASE ID   : ${id}
+CASE NO   : ${caseNumber.trim()}
+EXHIBIT   : ${exhibitNumber.trim()}
 TIMESTAMP : ${new Date(timestamp).toLocaleString()}
 REF-TS    : ${timestamp}
 STATUS    : SEALED / VERIFIED
@@ -261,6 +306,10 @@ STATUS    : SEALED / VERIFIED
 OPERATOR NAME : ${name.trim()}
 BADGE ID      : ${badge.trim()}
 ROLE          : ${role.trim()}
+FSL DIVISION  : ${labDivision.trim()}
+RECEIVED BY   : ${(receivingOfficer.trim() || name.trim())}
+SEAL CONDITION: ${sealCondition.trim()}
+PRIORITY      : ${priorityLevel.trim()}
 EVIDENCE FROM : ${finalEvidenceSource.trim()}
 ================================
 [ EVIDENCE MANIFEST ]
@@ -290,6 +339,12 @@ END OF RECORD`.trim();
     setName("");
     setBadge("");
     setRole("");
+    setCaseNumber("");
+    setExhibitNumber("");
+    setLabDivision("Digital Forensics");
+    setReceivingOfficer("");
+    setSealCondition("Intact");
+    setPriorityLevel("Routine");
     setEvidenceSource("");
     setLocationDetails("");
     setSections([{ title: "Evidence 1", content: "" }]);
@@ -747,6 +802,12 @@ END OF RECORD`.trim();
       const extractedOp = getValue('OPERATOR NAME');
       const extractedBid = getValue('BADGE ID');
       const extractedRole = getValue('ROLE');
+      const extractedCaseNo = getValue('CASE NO');
+      const extractedExhibitNo = getValue('EXHIBIT');
+      const extractedDivision = getValue('FSL DIVISION');
+      const extractedReceivedBy = getValue('RECEIVED BY');
+      const extractedSeal = getValue('SEAL CONDITION');
+      const extractedPriority = getValue('PRIORITY');
       const extractedSrc = getValue('EVIDENCE FROM');
 
       let extractedHash = "";
@@ -782,7 +843,21 @@ END OF RECORD`.trim();
       if (extractedId && extractedHash) {
         phanixData = {
           hash: extractedHash,
-          data: { uid: extractedId, ts: extractedTimestamp, op: extractedOp, bid: extractedBid, role: extractedRole, src: extractedSrc, sec: extractedSec }
+          data: {
+            uid: extractedId,
+            ts: extractedTimestamp,
+            op: extractedOp,
+            bid: extractedBid,
+            role: extractedRole,
+            caseNo: extractedCaseNo,
+            exhibitNo: extractedExhibitNo,
+            division: extractedDivision,
+            receivedBy: extractedReceivedBy,
+            seal: extractedSeal,
+            priority: extractedPriority,
+            src: extractedSrc,
+            sec: extractedSec
+          }
         };
         
         setScanResult({
@@ -806,6 +881,34 @@ END OF RECORD`.trim();
     borderRadius: "12px",
     boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
   };
+
+  const fslFieldStyle = {
+    padding: "12px 16px",
+    borderRadius: 4,
+    background: "transparent",
+    border: "1px solid #52525b",
+    color: "#f4f4f5",
+    outline: "none",
+    fontSize: 14,
+    transition: "all 0.2s",
+    width: "100%",
+  };
+
+  const fslLabelStyle = {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#a1a1aa",
+    marginBottom: 4,
+    display: "block",
+    letterSpacing: 0.5,
+  };
+
+  const readinessItems = [
+    { label: "Unique case reference", ready: caseNumber.trim() && exhibitNumber.trim() },
+    { label: "Authorized operator", ready: name.trim() && badge.trim() && role.trim() },
+    { label: "FSL intake metadata", ready: labDivision.trim() && sealCondition.trim() && priorityLevel.trim() },
+    { label: "Source and custody notes", ready: evidenceSource.trim() && sections.some((s) => s.content.trim()) },
+  ];
 
   return (
     <div
@@ -875,7 +978,7 @@ END OF RECORD`.trim();
                 fontWeight: 400,
                 lineHeight: '1.2'
             }}>
-                Powered by
+                Powered by.
             </div>
             <div style={{
                 color: accent,
@@ -1135,6 +1238,82 @@ END OF RECORD`.trim();
           <div style={{ animation: "fadeIn 0.5s ease" }}>
             <div
               style={{
+                ...materialCardStyle,
+                padding: 22,
+                marginBottom: 22,
+                borderRadius: 8,
+                background: "#202024",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, marginBottom: 6 }}>
+                    FSL-READY INTAKE
+                  </div>
+                  <h2 style={{ margin: 0, fontSize: 20, color: "#f4f4f5", fontWeight: 700 }}>
+                    Evidence package standards check
+                  </h2>
+                  <p style={{ margin: "8px 0 0", color: "#a1a1aa", fontSize: 13, lineHeight: 1.6, maxWidth: 560 }}>
+                    Designed around common forensic lab intake expectations: case reference, exhibit identity,
+                    seal condition, receiving officer, timestamp, and SHA-256 integrity record.
+                  </p>
+                </div>
+                <div
+                  style={{
+                    padding: "7px 12px",
+                    borderRadius: 18,
+                    border: "1px solid rgba(16, 185, 129, 0.35)",
+                    color: "#6ee7b7",
+                    background: "rgba(16, 185, 129, 0.08)",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: 0.8,
+                  }}
+                >
+                  LAB MODE
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: 10,
+                  marginTop: 18,
+                }}
+              >
+                {readinessItems.map((item) => (
+                  <div
+                    key={item.label}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "10px 12px",
+                      background: "#18181b",
+                      border: `1px solid ${item.ready ? "rgba(16, 185, 129, 0.35)" : "#3f3f46"}`,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 9,
+                        height: 9,
+                        borderRadius: "50%",
+                        background: item.ready ? "#10b981" : "#71717a",
+                        boxShadow: item.ready ? "0 0 8px rgba(16, 185, 129, 0.7)" : "none",
+                        flex: "0 0 auto",
+                      }}
+                    />
+                    <span style={{ color: item.ready ? "#d4d4d8" : "#a1a1aa", fontSize: 12, fontWeight: 600 }}>
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div
+              style={{
                 display: "flex",
                 flexDirection: "column",
                 gap: 20,
@@ -1168,6 +1347,84 @@ END OF RECORD`.trim();
                     transition: "all 0.2s",
                   }}
                 />
+              </div>
+              <div
+                style={{
+                  ...materialCardStyle,
+                  padding: 18,
+                  borderRadius: 8,
+                  background: "#202024",
+                  boxShadow: "none",
+                }}
+              >
+                <div style={{ color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 14 }}>
+                  FSL ACCESSION DETAILS
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label style={fslLabelStyle}>CASE / CRIME NUMBER</label>
+                    <input
+                      placeholder="e.g. FIR-2026-0142"
+                      value={caseNumber}
+                      onChange={(e) => setCaseNumber(e.target.value)}
+                      style={fslFieldStyle}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label style={fslLabelStyle}>EXHIBIT / ARTICLE NUMBER</label>
+                    <input
+                      placeholder="e.g. EX-01 / A1"
+                      value={exhibitNumber}
+                      onChange={(e) => setExhibitNumber(e.target.value)}
+                      style={fslFieldStyle}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label style={fslLabelStyle}>FSL DIVISION</label>
+                    <select
+                      value={labDivision}
+                      onChange={(e) => setLabDivision(e.target.value)}
+                      style={fslFieldStyle}
+                    >
+                      {FSL_DIVISIONS.map((division) => (
+                        <option key={division} value={division}>{division}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label style={fslLabelStyle}>RECEIVING / CUSTODY OFFICER</label>
+                    <input
+                      placeholder="Defaults to operator if blank"
+                      value={receivingOfficer}
+                      onChange={(e) => setReceivingOfficer(e.target.value)}
+                      style={fslFieldStyle}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label style={fslLabelStyle}>SEAL CONDITION</label>
+                    <select
+                      value={sealCondition}
+                      onChange={(e) => setSealCondition(e.target.value)}
+                      style={fslFieldStyle}
+                    >
+                      {SEAL_CONDITIONS.map((condition) => (
+                        <option key={condition} value={condition}>{condition}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label style={fslLabelStyle}>SUBMISSION PRIORITY</label>
+                    <select
+                      value={priorityLevel}
+                      onChange={(e) => setPriorityLevel(e.target.value)}
+                      style={fslFieldStyle}
+                    >
+                      {PRIORITY_LEVELS.map((priority) => (
+                        <option key={priority} value={priority}>{priority}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <label
@@ -1782,6 +2039,34 @@ END OF RECORD`.trim();
                     }}
                   >
                     PACKAGE ID
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                      gap: 10,
+                      marginBottom: 14,
+                      paddingBottom: 14,
+                      borderBottom: "1px solid #3f3f46",
+                    }}
+                  >
+                    {[
+                      ["CASE NO", caseNumber],
+                      ["EXHIBIT", exhibitNumber],
+                      ["DIVISION", labDivision],
+                      ["SEAL", sealCondition],
+                      ["PRIORITY", priorityLevel],
+                      ["RECEIVED BY", receivingOfficer || name],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <div style={{ fontSize: 9, color: "#71717a", fontWeight: 800, letterSpacing: 0.8, marginBottom: 3 }}>
+                          {label}
+                        </div>
+                        <div style={{ color: "#e4e4e7", fontSize: 12, fontWeight: 600, wordBreak: "break-word" }}>
+                          {value}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   <div
                     style={{

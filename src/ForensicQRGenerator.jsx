@@ -312,6 +312,13 @@ SEAL CONDITION: ${sealCondition.trim()}
 PRIORITY      : ${priorityLevel.trim()}
 EVIDENCE FROM : ${finalEvidenceSource.trim()}
 ================================
+[ CHAIN OF CUSTODY ]
+01. COLLECTED / SUBMITTED BY : ${name.trim()} (${badge.trim()})
+02. SOURCE DOCUMENTED        : ${finalEvidenceSource.trim()}
+03. RECEIVED BY FSL          : ${(receivingOfficer.trim() || name.trim())}
+04. SEAL CONDITION           : ${sealCondition.trim()}
+05. DIGITAL PACKAGE SEALED   : ${timestamp}
+================================
 [ EVIDENCE MANIFEST ]
 ${canonicalSections.map((s, i) => `
 #${i + 1} :: ${s.title}
@@ -910,6 +917,14 @@ END OF RECORD`.trim();
     { label: "Source and custody notes", ready: evidenceSource.trim() && sections.some((s) => s.content.trim()) },
   ];
 
+  const custodySteps = [
+    { step: "Collected", detail: name.trim() ? `${name.trim()} (${badge.trim() || "Badge pending"})` : "Awaiting operator details" },
+    { step: "Source Logged", detail: evidenceSource.trim() || "Awaiting evidence source" },
+    { step: "FSL Received", detail: receivingOfficer.trim() || name.trim() || "Awaiting receiving officer" },
+    { step: "Seal Checked", detail: sealCondition },
+    { step: "QR Sealed", detail: qrData ? "SHA-256 package generated" : "Pending package generation" },
+  ];
+
   return (
     <div
       style={{
@@ -1333,7 +1348,7 @@ END OF RECORD`.trim();
                   OPERATOR NAME
                 </label>
                 <input
-                  placeholder="e.g. simplely add your name "
+                  placeholder="Enter authorized officer / examiner name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   style={{
@@ -1439,7 +1454,7 @@ END OF RECORD`.trim();
                   BADGE ID
                 </label>
                 <input
-                  placeholder="e.g.   make sure it is your badge id "
+                  placeholder="Enter official badge / employee ID"
                   value={badge}
                   onChange={(e) => setBadge(e.target.value)}
                   style={{
@@ -1467,7 +1482,7 @@ END OF RECORD`.trim();
                   ROLE
                 </label>
                 <input
-                  placeholder="e.g. Senior Investigator if you are or write differnet "
+                  placeholder="e.g. Investigating Officer, Lab Examiner"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                   style={{
@@ -1497,7 +1512,7 @@ END OF RECORD`.trim();
                 
                 <div style={{ position: 'relative' }}>
                     <input
-                      placeholder="Select or Type Location..."
+                      placeholder="Select or enter evidence source location"
                       value={evidenceSource}
                       onChange={(e) => {
                           setEvidenceSource(e.target.value);
@@ -1577,8 +1592,8 @@ END OF RECORD`.trim();
                         <textarea
                           ref={detailsRef}
                           placeholder={
-                              evidenceSource === "Police Station" ? "Enter Precinct / Station Name" :
-                              "Enter specific room, area, or notes..."
+                              evidenceSource === "Police Station" ? "Enter police station / unit name" :
+                              "Enter specific room, area, landmark, or custody notes"
                           }
                           value={locationDetails}
                           onChange={(e) => {
@@ -1636,6 +1651,61 @@ END OF RECORD`.trim();
                       </div>
                   </div>
                 )}
+              </div>
+            </div>
+
+            <div
+              style={{
+                ...materialCardStyle,
+                padding: 18,
+                borderRadius: 8,
+                background: "#202024",
+                boxShadow: "none",
+                marginBottom: 20,
+              }}
+            >
+              <div style={{ color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 14 }}>
+                CHAIN OF CUSTODY
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+                {custodySteps.map((item, index) => (
+                  <div
+                    key={item.step}
+                    style={{
+                      padding: "12px",
+                      background: "#18181b",
+                      border: "1px solid #3f3f46",
+                      borderRadius: 6,
+                      minHeight: 82,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <div
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: "50%",
+                          background: index === custodySteps.length - 1 && qrData ? "#10b981" : "rgba(59, 130, 246, 0.15)",
+                          color: index === custodySteps.length - 1 && qrData ? "#ffffff" : accent,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          flex: "0 0 auto",
+                        }}
+                      >
+                        {index + 1}
+                      </div>
+                      <div style={{ color: "#f4f4f5", fontSize: 12, fontWeight: 700 }}>
+                        {item.step}
+                      </div>
+                    </div>
+                    <div style={{ color: "#a1a1aa", fontSize: 12, lineHeight: 1.45, wordBreak: "break-word" }}>
+                      {item.detail}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -2038,7 +2108,7 @@ END OF RECORD`.trim();
                       letterSpacing: 1,
                     }}
                   >
-                    PACKAGE ID
+                    FSL PACKAGE VIEW
                   </div>
                   <div
                     style={{
@@ -2067,6 +2137,17 @@ END OF RECORD`.trim();
                         </div>
                       </div>
                     ))}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: "bold",
+                      color: "#a1a1aa",
+                      marginBottom: 4,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    PACKAGE ID
                   </div>
                   <div
                     style={{
@@ -2939,7 +3020,7 @@ END OF RECORD`.trim();
               )}
 
                {/* P.H.A.N.I.X FORENSIC ANALYSIS REPORT */}
-              {analysisReport && !validationError && (
+              {analysisReport && !validationError && scanResult?.type !== 'valid' && (
                 <div style={{ marginTop: 40, animation: "fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }}>
                    <div style={{ 
                      padding: '20px 28px', 
@@ -3309,7 +3390,6 @@ END OF RECORD`.trim();
                               onClick={() => navigator.clipboard.writeText(analysisReport.hash)}
                               style={{ 
                                 background: 'transparent', 
-                                border: 'none', 
                                 color: accent, 
                                 fontSize: 11, 
                                 cursor: 'pointer',
@@ -3416,43 +3496,192 @@ END OF RECORD`.trim();
               )}
 
               {scanResult && (
-                <div style={{ marginTop: 30, animation: "fadeIn 0.3s ease" }}>
-                  <div style={{ height: 1, background: "#3f3f46", marginBottom: 20 }}></div>
+                <div style={{ marginTop: scanResult.type === 'valid' ? 34 : 30, animation: "fadeIn 0.3s ease" }}>
+                  {scanResult.type !== 'valid' && (
+                    <div style={{ height: 1, background: "#3f3f46", marginBottom: 20 }}></div>
+                  )}
                   
                   {scanResult.type === 'valid' ? (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 15 }}>
-                        <div style={{ color: '#10b981', fontSize: 18 }}>✓</div>
-                        <h3 style={{ margin: 0, fontSize: 16, color: '#f4f4f5' }}>Valid Forensic Structure Detected</h3>
+                    <div
+                      style={{
+                        background: "linear-gradient(135deg, #111827 0%, #18181b 58%, #0f172a 100%)",
+                        border: "1px solid rgba(16, 185, 129, 0.35)",
+                        borderRadius: 18,
+                        overflow: "hidden",
+                        boxShadow: "0 18px 40px rgba(0, 0, 0, 0.28)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "22px 24px",
+                          borderBottom: "1px solid rgba(16, 185, 129, 0.18)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 16,
+                          flexWrap: "wrap",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <div>
+                          <div style={{ color: "#6ee7b7", fontSize: 11, fontWeight: 900, letterSpacing: 1.4, marginBottom: 6 }}>
+                            VERIFIED QR RECORD
+                          </div>
+                          <h3 style={{ margin: 0, fontSize: 21, color: "#f4f4f5", fontWeight: 800 }}>
+                            FSL Evidence Information View
+                          </h3>
+                          <p style={{ margin: "8px 0 0", color: "#a7f3d0", fontSize: 13, lineHeight: 1.55, maxWidth: 560 }}>
+                            The scanned QR contains a structured PHANIX forensic package with case metadata,
+                            custody details, evidence notes, and SHA-256 integrity reference.
+                          </p>
+                        </div>
+                        <div
+                          style={{
+                            padding: "7px 12px",
+                            borderRadius: 20,
+                            background: "rgba(16, 185, 129, 0.12)",
+                            border: "1px solid rgba(16, 185, 129, 0.35)",
+                            color: "#6ee7b7",
+                            fontSize: 11,
+                            fontWeight: 900,
+                            letterSpacing: 0.8,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          HASH MATCHED
+                        </div>
                       </div>
-                      
-                      <div style={{ background: '#18181b', borderRadius: 8, padding: 20 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 20 }}>
-                          <div>
-                            <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 4 }}>CASE ID</div>
-                            <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{scanResult.data.uid}</div>
+
+                      <div style={{ padding: 24 }}>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                            gap: 12,
+                            marginBottom: 18,
+                          }}
+                        >
+                          {[
+                            ["CASE / CRIME NO", scanResult.data.caseNo || "Not recorded"],
+                            ["EXHIBIT", scanResult.data.exhibitNo || "Not recorded"],
+                            ["PACKAGE ID", scanResult.data.uid],
+                            ["TIMESTAMP", scanResult.data.ts],
+                            ["OPERATOR", scanResult.data.op],
+                            ["BADGE ID", scanResult.data.bid],
+                            ["ROLE", scanResult.data.role || "Not recorded"],
+                            ["FSL DIVISION", scanResult.data.division || "Not recorded"],
+                            ["RECEIVED BY", scanResult.data.receivedBy || scanResult.data.op],
+                            ["SEAL CONDITION", scanResult.data.seal || "Not recorded"],
+                            ["PRIORITY", scanResult.data.priority || "Routine"],
+                            ["SOURCE", scanResult.data.src],
+                          ].map(([label, value]) => (
+                            <div
+                              key={label}
+                              style={{
+                                background: "rgba(255, 255, 255, 0.035)",
+                                border: "1px solid rgba(255, 255, 255, 0.06)",
+                                borderRadius: 8,
+                                padding: "12px 13px",
+                                minHeight: 68,
+                              }}
+                            >
+                              <div style={{ color: "#71717a", fontSize: 10, fontWeight: 900, letterSpacing: 0.8, marginBottom: 6 }}>
+                                {label}
+                              </div>
+                              <div style={{ color: "#f4f4f5", fontSize: 13, fontWeight: 650, wordBreak: "break-word", lineHeight: 1.4 }}>
+                                {value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div
+                          style={{
+                            background: "rgba(16, 185, 129, 0.07)",
+                            border: "1px solid rgba(16, 185, 129, 0.18)",
+                            borderRadius: 10,
+                            padding: 16,
+                            marginBottom: 18,
+                          }}
+                        >
+                          <div style={{ color: "#6ee7b7", fontSize: 11, fontWeight: 900, letterSpacing: 1, marginBottom: 12 }}>
+                            CHAIN OF CUSTODY
                           </div>
-                          <div>
-                            <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 4 }}>TIMESTAMP</div>
-                            <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{scanResult.data.ts}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 4 }}>OPERATOR</div>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{scanResult.data.op}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 4 }}>SOURCE</div>
-                            <div style={{ fontSize: 14 }}>{scanResult.data.src}</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 10 }}>
+                            {[
+                              ["1", "Collected", scanResult.data.op],
+                              ["2", "Source Logged", scanResult.data.src],
+                              ["3", "FSL Received", scanResult.data.receivedBy || scanResult.data.op],
+                              ["4", "Seal Checked", scanResult.data.seal || "Not recorded"],
+                              ["5", "QR Verified", "Integrity structure detected"],
+                            ].map(([num, title, detail]) => (
+                              <div key={`${num}-${title}`} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                                <div
+                                  style={{
+                                    width: 22,
+                                    height: 22,
+                                    borderRadius: "50%",
+                                    background: "#10b981",
+                                    color: "#ffffff",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 11,
+                                    fontWeight: 900,
+                                    flex: "0 0 auto",
+                                  }}
+                                >
+                                  {num}
+                                </div>
+                                <div>
+                                  <div style={{ color: "#d1fae5", fontSize: 12, fontWeight: 800 }}>{title}</div>
+                                  <div style={{ color: "#a7f3d0", fontSize: 11, lineHeight: 1.35, marginTop: 2 }}>{detail}</div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
 
-                        <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 8 }}>EVIDENCE SECTIONS</div>
-                        {scanResult.data.sec.map((s, i) => (
-                          <div key={i} style={{ marginBottom: 10, paddingLeft: 10, borderLeft: `2px solid ${accent}` }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{s.title}</div>
-                            <div style={{ fontSize: 13, opacity: 0.8 }}>{s.content}</div>
+                        <div style={{ color: "#a1a1aa", fontSize: 11, fontWeight: 900, letterSpacing: 1, marginBottom: 10 }}>
+                          EVIDENCE MANIFEST
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {scanResult.data.sec.map((s, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                background: "#18181b",
+                                border: "1px solid #3f3f46",
+                                borderLeft: `3px solid ${accent}`,
+                                borderRadius: 8,
+                                padding: "13px 15px",
+                              }}
+                            >
+                              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 5, color: "#f4f4f5" }}>
+                                {i + 1}. {s.title || "Evidence Section"}
+                              </div>
+                              <div style={{ fontSize: 13, color: "#d4d4d8", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+                                {s.content || "No section details recorded."}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 18,
+                            background: "#09090b",
+                            border: "1px solid rgba(59, 130, 246, 0.25)",
+                            borderRadius: 8,
+                            padding: 14,
+                          }}
+                        >
+                          <div style={{ color: accent, fontSize: 10, fontWeight: 900, letterSpacing: 1, marginBottom: 8 }}>
+                            SHA-256 INTEGRITY HASH
                           </div>
-                        ))}
+                          <div style={{ color: "#f4f4f5", fontFamily: "monospace", fontSize: 12, lineHeight: 1.6, wordBreak: "break-all" }}>
+                            {scanResult.hash}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ) : (

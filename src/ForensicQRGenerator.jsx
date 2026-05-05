@@ -373,250 +373,376 @@ END OF RECORD`.trim();
     navigator.clipboard.writeText(qrData);
   };
 
-  const downloadForensicReport = () => {
-    if (!analysisReport) return;
-    
+  const exportForensicReportPdf = (report) => {
+    if (!report) return;
+
     const doc = new jsPDF();
-    const accentColor = [59, 130, 246]; // #3b82f6
-    const darkBg = [24, 24, 27]; // #18181b
-    const lightText = [244, 244, 245]; // #f4f4f5
-    const dimText = [161, 161, 170]; // #a1a1aa
-
-    // Page Background
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, 210, 297, 'F');
-
-    // Header Area
-    doc.setFillColor(...darkBg);
-    doc.rect(0, 0, 210, 45, 'F');
-    
-    // Header Accent Line
-    doc.setFillColor(...accentColor);
-    doc.rect(0, 45, 210, 2, 'F');
-
-    // Title
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(24);
-    doc.text("P.H.A.N.I.X", 20, 20);
-    
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "normal");
-    doc.text("FORENSIC EVIDENCE CERTIFICATE", 20, 30);
-    
-    // Status Badge
-    const statusText = analysisReport.trustStatus;
-    const isTrusted = statusText === 'TRUSTED SEAL';
-    doc.setFillColor(isTrusted ? 16 : 239, isTrusted ? 185 : 68, isTrusted ? 129 : 68);
-    doc.roundedRect(140, 15, 55, 12, 3, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text(statusText, 167.5, 23, { align: "center" });
-
-    // Certificate Meta
-    doc.setTextColor(100, 100, 100);
-    doc.setFontSize(9);
-    doc.text(`CERTIFICATE ID: ${analysisReport.hash.substring(0, 12).toUpperCase()}`, 20, 55);
-    doc.text(`ISSUED ON: ${new Date().toLocaleString()}`, 20, 60);
-
-    // Main Content Section
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(15, 70, 180, 50, 4, 4, 'F');
-    
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("CORE INTEGRITY DATA", 25, 80);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.text("SHA-256 INTEGRITY HASH:", 25, 90);
-    doc.setFont("courier", "bold");
-    doc.setTextColor(0, 100, 0);
-    doc.text(analysisReport.hash, 25, 96, { maxWidth: 160 });
-    
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(80, 80, 80);
-    doc.text(`SOURCE: ${analysisReport.source.replace(/_/g, ' ')}`, 25, 110);
-    doc.text(`TIMESTAMP: ${new Date(analysisReport.timestamp).toLocaleString()}`, 25, 115);
-
-    // Verification Checklist
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("VERIFICATION CHECKLIST", 25, 135);
-    
-    let yPos = 145;
-    analysisReport.checklist.forEach(item => {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(item.label, 32, yPos);
-      
-      const passed = item.status === 'PASS';
-      doc.setTextColor(passed ? 0 : 200, passed ? 150 : 0, 0);
+    const data = report.packageData || {};
+    const colors = {
+      ink: [24, 24, 27],
+      muted: [82, 82, 91],
+      line: [228, 228, 231],
+      panel: [248, 250, 252],
+      blue: [37, 99, 235],
+      green: [5, 150, 105],
+      amber: [217, 119, 6],
+      red: [220, 38, 38],
+    };
+    const isTrusted = report.trustStatus === "TRUSTED SEAL";
+    const statusColor = isTrusted ? colors.green : report.riskLevel === "HIGH" ? colors.red : colors.amber;
+    const value = (input, fallback = "Not recorded") => `${input || ""}`.trim() || fallback;
+    const dateValue = (input) => {
+      const parsed = new Date(input);
+      return Number.isNaN(parsed.getTime()) ? value(input) : parsed.toLocaleString();
+    };
+    const writeLines = (text, x, y, width, options = {}) => {
+      doc.setFont(options.font || "helvetica", options.style || "normal");
+      doc.setFontSize(options.size || 9);
+      doc.setTextColor(...(options.color || colors.ink));
+      const lines = doc.splitTextToSize(value(text, options.fallback || "No details recorded."), width);
+      const maxLines = options.maxLines || lines.length;
+      const visible = lines.slice(0, maxLines);
+      if (lines.length > maxLines && visible.length) {
+        visible[visible.length - 1] = `${visible[visible.length - 1].replace(/\.*$/, "")}...`;
+      }
+      doc.text(visible, x, y);
+      return y + visible.length * (options.lineHeight || 4.8);
+    };
+    const shell = (page, title = "FORENSIC EVIDENCE REPORT") => {
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, 210, 297, "F");
+      doc.setFillColor(...colors.ink);
+      doc.rect(0, 0, 210, 31, "F");
+      doc.setFillColor(...statusColor);
+      doc.rect(0, 31, 210, 2.5, "F");
+      doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
-      doc.text(passed ? "PASSED" : "FAILED", 170, yPos, { align: "right" });
-      
-      doc.setFillColor(passed ? 0 : 200, passed ? 150 : 0, 0);
-      doc.circle(28, yPos - 1, 1, 'F');
-      
-      yPos += 8;
-    });
+      doc.setFontSize(19);
+      doc.text("P.H.A.N.I.X", 15, 15);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text(title, 15, 23);
+      doc.setFillColor(...statusColor);
+      doc.roundedRect(138, 10, 57, 10, 2, 2, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.2);
+      doc.text(report.trustStatus, 166.5, 16.6, { align: "center", maxWidth: 51 });
+      doc.setTextColor(...colors.muted);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.text(`Certificate ${report.hash.substring(0, 14).toUpperCase()}`, 15, 286);
+      doc.text(`Page ${page} of 2`, 195, 286, { align: "right" });
+    };
+    const section = (title, y) => {
+      doc.setFillColor(...colors.panel);
+      doc.roundedRect(15, y, 180, 9, 1.5, 1.5, "F");
+      doc.setTextColor(...colors.ink);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.text(title, 19, y + 6);
+      return y + 14;
+    };
+    const field = (label, text, x, y, width = 78, maxLines = 2) => {
+      doc.setTextColor(...colors.muted);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.8);
+      doc.text(label, x, y);
+      return writeLines(text, x, y + 4.7, width, { size: 8.5, maxLines, lineHeight: 4.2 });
+    };
+    const checklistMark = (item, x, y) => {
+      const pass = item.status === "PASS";
+      const skip = item.status === "SKIP" || item.status === "NONE";
+      doc.setFillColor(...(pass ? colors.green : skip ? colors.amber : colors.red));
+      doc.circle(x, y - 1.8, 1.7, "F");
+      doc.setTextColor(...colors.ink);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.8);
+      doc.text(item.label, x + 5, y);
+      doc.setFont("helvetica", "bold");
+      doc.text(pass ? "PASSED" : item.status, x + 82, y, { align: "right" });
+    };
 
-    // Risk Indicators
-    yPos += 10;
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("FORENSIC INDICATORS", 25, yPos);
-    
-    yPos += 10;
-    analysisReport.indicators.forEach(ind => {
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(9);
-      doc.setTextColor(120, 120, 120);
-      doc.text(`- ${ind}`, 25, yPos, { maxWidth: 160 });
-      yPos += 6;
-    });
-
-    // Advisory Footer
-    doc.setFillColor(240, 244, 255);
-    doc.rect(0, 260, 210, 37, 'F');
-    doc.setFillColor(...accentColor);
-    doc.rect(0, 260, 210, 1, 'F');
-    
-    doc.setTextColor(...accentColor);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("DOCUMENT ADVISORY & EVIDENTIARY INTEGRITY", 20, 272);
-    
-    doc.setTextColor(100, 100, 100);
+    shell(1);
+    doc.setTextColor(...colors.muted);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text("This digital certificate serves as a cryptographic proof of integrity for the provided data payload. Any manual modification to this document after generation voids its forensic validity. Keep this file for further authentication within the P.H.A.N.I.X ecosystem.", 20, 278, { maxWidth: 170 });
-    
-    doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
-    // Save PDF
-    doc.save(`Forensic_Certificate_${analysisReport.hash.substring(0, 8)}.pdf`);
+    doc.text(`Issued ${new Date().toLocaleString()}`, 15, 43);
+    doc.text(value(report.source).replace(/_/g, " "), 195, 43, { align: "right" });
+
+    doc.setFillColor(isTrusted ? 236 : 255, isTrusted ? 253 : 247, isTrusted ? 245 : 237);
+    doc.roundedRect(15, 51, 180, 34, 3, 3, "F");
+    doc.setTextColor(...statusColor);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text(report.classification, 22, 64, { maxWidth: 135 });
+    writeLines(report.trustDescription, 22, 72, 158, { size: 8.6, maxLines: 2, color: colors.ink });
+
+    let y = section("CASE SUMMARY", 96);
+    let nextY = Math.max(
+      field("CASE NUMBER", data.caseNo, 20, y),
+      field("EXHIBIT NUMBER", data.exhibitNo, 110, y)
+    );
+    y = nextY + 6;
+    nextY = Math.max(
+      field("PACKAGE ID", data.uid, 20, y),
+      field("REFERENCE TIME", dateValue(data.ts || report.timestamp), 110, y)
+    );
+    y = nextY + 6;
+    nextY = Math.max(
+      field("FSL DIVISION", data.division, 20, y),
+      field("PRIORITY", data.priority, 110, y)
+    );
+
+    y = section("OFFICER, SOURCE AND CUSTODY", nextY + 12);
+    nextY = Math.max(
+      field("OPERATOR", data.op, 20, y),
+      field("BADGE / ROLE", `${value(data.bid)} / ${value(data.role)}`, 110, y)
+    );
+    y = nextY + 6;
+    nextY = Math.max(
+      field("RECEIVED BY", data.receivedBy, 20, y),
+      field("SEAL CONDITION", data.seal, 110, y)
+    );
+    y = nextY + 6;
+    field("EVIDENCE SOURCE", data.src, 20, y, 168, 3);
+
+    y = section("CHAIN OF CUSTODY SNAPSHOT", 220);
+    [
+      ["01", "Collected", `${value(data.op)} (${value(data.bid)})`],
+      ["02", "Source logged", data.src],
+      ["03", "FSL received", data.receivedBy],
+      ["04", "Digital seal", dateValue(data.ts || report.timestamp)],
+    ].forEach(([step, label, detail], index) => {
+      const rowY = y + index * 8.5;
+      doc.setTextColor(...statusColor);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text(step, 20, rowY);
+      doc.setTextColor(...colors.ink);
+      doc.text(label, 33, rowY);
+      writeLines(detail, 72, rowY, 112, { size: 8, maxLines: 1, color: colors.muted });
+    });
+
+    doc.addPage();
+    shell(2);
+    y = section("CRYPTOGRAPHIC SIGNATURE", 45);
+    doc.setFillColor(250, 250, 250);
+    doc.roundedRect(20, y - 2, 170, 19, 2, 2, "F");
+    writeLines(report.hash, 25, y + 5, 160, { font: "courier", style: "bold", size: 7.8, maxLines: 2, color: isTrusted ? colors.green : colors.red });
+
+    y = section("VALIDATION CHECKLIST", 84);
+    report.checklist.slice(0, 4).forEach((item, index) => {
+      checklistMark(item, index % 2 === 0 ? 22 : 112, y + Math.floor(index / 2) * 11);
+    });
+
+    y = section("FORENSIC INDICATORS", 119);
+    const indicators = report.indicators.length ? report.indicators : ["No high-risk indicators were detected during automated analysis."];
+    indicators.slice(0, 5).forEach((indicator, index) => {
+      writeLines(`- ${indicator}`, 22, y + index * 7.5, 160, { size: 8.2, maxLines: 1, color: colors.muted });
+    });
+
+    y = section("EVIDENCE MANIFEST", 166);
+    const manifestSections = Array.isArray(data.sec) ? data.sec : [];
+    if (manifestSections.length === 0) {
+      writeLines("No evidence manifest was embedded in this payload.", 22, y, 160, { size: 8.6, color: colors.muted });
+    } else {
+      manifestSections.slice(0, 4).forEach((item, index) => {
+        const itemY = y + index * 17;
+        doc.setTextColor(...colors.blue);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.6);
+        doc.text(`${index + 1}. ${value(item.title, "Evidence Item")}`, 22, itemY, { maxWidth: 155 });
+        writeLines(item.content, 26, itemY + 5, 154, { size: 7.8, maxLines: 2, color: colors.muted, lineHeight: 3.8 });
+      });
+      if (manifestSections.length > 4) {
+        doc.setTextColor(...colors.muted);
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7.6);
+        doc.text(`Additional manifest items omitted from this two-page summary: ${manifestSections.length - 4}`, 22, 238);
+      }
+    }
+
+    doc.setFillColor(239, 246, 255);
+    doc.rect(0, 255, 210, 28, "F");
+    doc.setTextColor(...colors.blue);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.8);
+    doc.text("DOCUMENT ADVISORY", 20, 266);
+    writeLines("This two-page certificate is a concise evidentiary summary. Preserve the original QR payload and generated file together for full verification.", 20, 272, 170, { size: 7.8, maxLines: 2, color: colors.muted, lineHeight: 4 });
+
+    const fileId = value(data.caseNo, report.hash.substring(0, 8)).replace(/[^a-z0-9_-]/gi, "_");
+    doc.save(`Forensic_Evidence_Report_${fileId}.pdf`);
+  };
+
+  const downloadForensicReport = () => {
+    exportForensicReportPdf(analysisReport);
+  };
+
+  const downloadGeneratedForensicReport = () => {
+    if (!manifest || !qrData) return;
+
+    const finalEvidenceSource = locationDetails
+      ? `${evidenceSource} [ ${locationDetails} ]`
+      : evidenceSource;
+
+    exportForensicReportPdf({
+      hash: manifest.hash,
+      timestamp: manifest.timestamp,
+      classification: "PHANIX Secure Package",
+      riskLevel: "LOW",
+      trustStatus: "TRUSTED SEAL",
+      trustDescription: "Generated and sealed by PHANIX Architect. This report records the case metadata, custody path, evidence manifest, and SHA-256 signature at creation time.",
+      indicators: ["Report generated from PHANIX package builder", "Case metadata captured", "Evidence manifest attached", "SHA-256 package signature recorded"],
+      checklist: [
+        { label: "Required Case Fields", status: "PASS" },
+        { label: "Evidence Manifest", status: "PASS" },
+        { label: "Cryptographic Seal", status: "PASS" }
+      ],
+      source: "REPORT_GENERATOR",
+      packageData: {
+        uid: manifest.id,
+        ts: manifest.timestamp,
+        op: name.trim(),
+        bid: badge.trim(),
+        role: role.trim(),
+        caseNo: caseNumber.trim(),
+        exhibitNo: exhibitNumber.trim(),
+        division: labDivision.trim(),
+        receivedBy: receivingOfficer.trim() || name.trim(),
+        seal: sealCondition.trim(),
+        priority: priorityLevel.trim(),
+        src: finalEvidenceSource.trim(),
+        sec: sections.map((section) => ({
+          title: section.title.trim().toUpperCase() || "EVIDENCE ITEM",
+          content: section.content.trim()
+        }))
+      }
+    });
   };
 
   const downloadCorruptionReport = (source) => {
     const doc = new jsPDF();
-    const alertColor = [239, 68, 68]; // #ef4444
-    const darkBg = [24, 24, 27]; // #18181b
-    
-    // Page Background
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, 210, 297, 'F');
-
-    // Header Area
-    doc.setFillColor(...darkBg);
-    doc.rect(0, 0, 210, 45, 'F');
-    
-    // Header Accent Line
-    doc.setFillColor(...alertColor);
-    doc.rect(0, 45, 210, 2, 'F');
-
-    // Title
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(24);
-    doc.text("P.H.A.N.I.X", 20, 20);
-    
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "normal");
-    doc.text("FORENSIC ANALYSIS FAILURE REPORT", 20, 30);
-    
-    // Status Badge
-    doc.setFillColor(...alertColor);
-    doc.roundedRect(140, 15, 55, 12, 3, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("QR CORRUPTED", 167.5, 23, { align: "center" });
-
-    // Meta
-    doc.setTextColor(100, 100, 100);
-    doc.setFontSize(9);
-    doc.text(`REPORT ID: ERR_${Math.random().toString(36).substring(7).toUpperCase()}`, 20, 55);
-    doc.text(`ISSUED ON: ${new Date().toLocaleString()}`, 20, 60);
-
-    // Main Content Section
-    doc.setFillColor(254, 242, 242);
-    doc.roundedRect(15, 70, 180, 50, 4, 4, 'F');
-    
-    doc.setTextColor(153, 27, 27);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("ANALYSIS FAILURE DETAILS", 25, 80);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(185, 28, 28);
-    doc.text("REASON: Forensic Analysis Failure: QR pattern unreadable or corrupted.", 25, 90, { maxWidth: 160 });
-    
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(127, 29, 29);
-    doc.text(`SOURCE: ${source || "INTERNAL_SCAN"}`, 25, 110);
-    doc.text(`INTAKE TIMESTAMP: ${new Date().toLocaleString()}`, 25, 115);
-
-    // Scan Analysis Checklist (Simulated Failed)
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("SCAN ANALYSIS STATUS", 25, 135);
-    
-    let yPos = 145;
-    const items = [
-      { label: 'Pattern Detection', status: 'FAIL' },
-      { label: 'Data Extraction', status: 'FAIL' },
-      { label: 'Integrity Check', status: 'SKIP' }
-    ];
-    
-    items.forEach(item => {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(item.label, 32, yPos);
-      
-      const failed = item.status === 'FAIL';
-      doc.setTextColor(failed ? 200 : 100, 0, 0);
+    const reportId = `ERR_${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const colors = {
+      ink: [24, 24, 27],
+      muted: [82, 82, 91],
+      panel: [254, 242, 242],
+      red: [220, 38, 38],
+      amber: [217, 119, 6],
+    };
+    const shell = (page) => {
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, 210, 297, "F");
+      doc.setFillColor(...colors.ink);
+      doc.rect(0, 0, 210, 31, "F");
+      doc.setFillColor(...colors.red);
+      doc.rect(0, 31, 210, 2.5, "F");
+      doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
-      doc.text(item.status, 170, yPos, { align: "right" });
-      
-      doc.setFillColor(failed ? 200 : 100, 0, 0);
-      doc.circle(28, yPos - 1, 1, 'F');
-      
-      yPos += 8;
+      doc.setFontSize(19);
+      doc.text("P.H.A.N.I.X", 15, 15);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text("FORENSIC ANALYSIS FAILURE REPORT", 15, 23);
+      doc.setFillColor(...colors.red);
+      doc.roundedRect(139, 10, 56, 10, 2, 2, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.6);
+      doc.text("QR CORRUPTED", 167, 16.6, { align: "center" });
+      doc.setTextColor(...colors.muted);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.text(`Failure report ${reportId}`, 15, 286);
+      doc.text(`Page ${page} of 2`, 195, 286, { align: "right" });
+    };
+    const title = (text, y) => {
+      doc.setFillColor(250, 250, 250);
+      doc.roundedRect(15, y, 180, 9, 1.5, 1.5, "F");
+      doc.setTextColor(...colors.ink);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.text(text, 19, y + 6);
+      return y + 14;
+    };
+    const textBlock = (text, x, y, width, options = {}) => {
+      doc.setFont(options.font || "helvetica", options.style || "normal");
+      doc.setFontSize(options.size || 8.8);
+      doc.setTextColor(...(options.color || colors.ink));
+      const lines = doc.splitTextToSize(text, width).slice(0, options.maxLines || 6);
+      doc.text(lines, x, y);
+      return y + lines.length * (options.lineHeight || 4.8);
+    };
+    const statusRow = (label, status, y) => {
+      const fail = status === "FAIL";
+      doc.setFillColor(...(fail ? colors.red : colors.amber));
+      doc.circle(22, y - 1.8, 1.7, "F");
+      doc.setTextColor(...colors.ink);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.8);
+      doc.text(label, 28, y);
+      doc.setFont("helvetica", "bold");
+      doc.text(status, 180, y, { align: "right" });
+    };
+
+    shell(1);
+    doc.setTextColor(...colors.muted);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Issued ${new Date().toLocaleString()}`, 15, 43);
+    doc.text((source || "INTERNAL_SCAN").replace(/_/g, " "), 195, 43, { align: "right" });
+
+    doc.setFillColor(...colors.panel);
+    doc.roundedRect(15, 52, 180, 38, 3, 3, "F");
+    doc.setTextColor(...colors.red);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("QR analysis could not be completed", 22, 66);
+    textBlock("The submitted QR pattern was unreadable, incomplete, malformed, or visually degraded. No cryptographic trust decision can be made from this intake.", 22, 75, 158, { size: 8.8, color: colors.ink, maxLines: 2 });
+
+    let y = title("INTAKE SUMMARY", 105);
+    textBlock(`Report ID: ${reportId}`, 20, y, 165, { size: 8.8 });
+    textBlock(`Evidence source: ${(source || "INTERNAL_SCAN").replace(/_/g, " ")}`, 20, y + 8, 165, { size: 8.8 });
+    textBlock(`Intake timestamp: ${new Date().toLocaleString()}`, 20, y + 16, 165, { size: 8.8 });
+
+    y = title("FAILURE STATUS", 145);
+    [
+      ["Pattern detection", "FAIL"],
+      ["Data extraction", "FAIL"],
+      ["Integrity check", "SKIP"],
+      ["PHANIX seal validation", "SKIP"],
+    ].forEach(([label, status], index) => statusRow(label, status, y + index * 10));
+
+    y = title("CASE HANDLING NOTE", 205);
+    textBlock("Attach this failure report to the incident file only as documentation of non-extractable QR evidence. It does not certify authenticity, origin, or payload integrity.", 20, y, 165, { size: 8.6, color: colors.muted, maxLines: 4 });
+
+    doc.addPage();
+    shell(2);
+    y = title("TECHNICAL OBSERVATION", 45);
+    textBlock("The analysis pipeline attempted QR pattern discovery and data extraction. The evidence did not provide a readable payload suitable for SHA-256 comparison or PHANIX package reconstruction.", 20, y, 165, { size: 8.8, color: colors.muted, maxLines: 4 });
+
+    y = title("RECOMMENDED NEXT ACTIONS", 92);
+    [
+      "Capture a sharper image under even lighting.",
+      "Avoid glare, heavy cropping, rotation, and compression.",
+      "Preserve the original media file before further handling.",
+      "If physical evidence is damaged, document condition with photographs.",
+      "Rescan the source after stabilizing the image or camera feed.",
+    ].forEach((item, index) => {
+      textBlock(`${index + 1}. ${item}`, 22, y + index * 9, 160, { size: 8.6, color: colors.ink, maxLines: 1 });
     });
 
-    // Advisory Footer
-    doc.setFillColor(254, 242, 242);
-    doc.rect(0, 260, 210, 37, 'F');
-    doc.setFillColor(...alertColor);
-    doc.rect(0, 260, 210, 1, 'F');
-    
-    doc.setTextColor(...alertColor);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("FORENSIC ADVISORY: EVIDENCE INTEGRITY FAILURE", 20, 272);
-    
-    doc.setTextColor(127, 29, 29);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text("This document certifies that the provided evidence source could not be cryptographically validated. The QR code pattern is either damaged, incomplete, or malformed. This failure report should be attached to the incident file for documentation of non-extractable evidence.", 20, 278, { maxWidth: 170 });
-    
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(8);
-    doc.setTextColor(153, 27, 27);
-    doc.text("Certified by P.H.A.N.I.X - Automated Chain of Custody Validation.", 105, 292, { align: "center" });
+    y = title("EVIDENTIARY LIMITATION", 160);
+    textBlock("This document is a failure certificate, not a verification certificate. It confirms that the QR could not be decoded by the application at intake time. Treat any later manual reconstruction as a separate examination event.", 20, y, 165, { size: 8.8, color: colors.muted, maxLines: 5 });
 
-    // Save PDF
-    doc.save(`Forensic_Failure_Report_${new Date().getTime()}.pdf`);
+    doc.setFillColor(...colors.panel);
+    doc.rect(0, 255, 210, 28, "F");
+    doc.setTextColor(...colors.red);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.8);
+    doc.text("FORENSIC ADVISORY", 20, 266);
+    textBlock("Keep this two-page failure report with the original intake material and retry validation only from preserved source media.", 20, 272, 170, { size: 7.8, maxLines: 2, color: colors.muted, lineHeight: 4 });
+
+    doc.save(`Forensic_Failure_Report_${reportId}.pdf`);
   };
 
   const addSection = () => {
@@ -763,17 +889,16 @@ END OF RECORD`.trim();
       }
       // ... (keep other indicators)
     } else {
-      // (keep default logic for other types)
-      // JSON / Structured Data Pipeline
-      if (rawData.trim().startsWith("{") && rawData.trim().endsWith("}")) {
-        try {
-          JSON.parse(rawData);
-          classification = "JSON / Structured Payload";
-          trustStatus = "FORMAT VALIDATED";
-          trustDescription = "Valid structured data detected. Origin unauthenticated.";
-        } catch (e) {}
-      }
-      // (etc...)
+      classification = "External / Untrusted Data";
+      trustStatus = "AUTHENTICATION FAILED";
+      trustDescription = "The scanned QR does not match the PHANIX forensic architecture. No cryptographic trust can be established.";
+      riskLevel = "HIGH";
+      indicators = ["Non-Phanix signature detected", "External data source", "Integrity check failed"];
+      checklist = [
+        { label: "Structural Analysis", status: "FAIL" },
+        { label: "Internal Hash Check", status: "SKIP" },
+        { label: "Authenticity Seal", status: "FAIL" }
+      ];
     }
 
     setAnalysisReport({
@@ -785,7 +910,8 @@ END OF RECORD`.trim();
       trustDescription,
       indicators,
       checklist,
-      source: isCameraActive ? "LIVE_CAMERA_SCAN" : "FORENSIC_IMAGE_INTAKE"
+      source: isCameraActive ? "LIVE_CAMERA_SCAN" : "FORENSIC_IMAGE_INTAKE",
+      packageData: phanixData?.data || null
     });
   };
 
@@ -801,7 +927,7 @@ END OF RECORD`.trim();
       const lines = content.split('\n');
       const getValue = (key) => {
         const line = lines.find(l => l.includes(key));
-        return line ? line.split(':')[1].trim() : '';
+        return line ? line.slice(line.indexOf(':') + 1).trim() : '';
       };
 
       const extractedId = getValue('CASE ID');
@@ -873,10 +999,10 @@ END OF RECORD`.trim();
           hash: extractedHash
         });
       } else {
-        setScanResult({ type: 'raw', data: content });
+        setScanResult({ type: 'failed', data: content });
       }
     } else {
-      setScanResult({ type: 'raw', data: content });
+      setScanResult({ type: 'failed', data: content });
     }
 
     performForensicAnalysis(content, phanixData);
@@ -2069,6 +2195,21 @@ END OF RECORD`.trim();
                     }}
                   >
                     Download QR
+                  </button>
+                  <button
+                    onClick={downloadGeneratedForensicReport}
+                    style={{
+                      flex: 1,
+                      padding: "8px 16px",
+                      borderRadius: 4,
+                      border: "1px solid #bfdbfe",
+                      background: "#eff6ff",
+                      color: "#1d4ed8",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Download Report PDF
                   </button>
                   <button
                     onClick={copyReport}
@@ -3678,20 +3819,166 @@ END OF RECORD`.trim();
                           <div style={{ color: accent, fontSize: 10, fontWeight: 900, letterSpacing: 1, marginBottom: 8 }}>
                             SHA-256 INTEGRITY HASH
                           </div>
-                          <div style={{ color: "#f4f4f5", fontFamily: "monospace", fontSize: 12, lineHeight: 1.6, wordBreak: "break-all" }}>
-                            {scanResult.hash}
+	                          <div style={{ color: "#f4f4f5", fontFamily: "monospace", fontSize: 12, lineHeight: 1.6, wordBreak: "break-all" }}>
+	                            {scanResult.hash}
+	                          </div>
+	                        </div>
+	                        <div
+	                          style={{
+	                            marginTop: 18,
+	                            padding: "16px 18px",
+	                            borderRadius: 10,
+	                            background: "rgba(16, 185, 129, 0.08)",
+	                            border: "1px solid rgba(16, 185, 129, 0.22)",
+	                            display: "flex",
+	                            justifyContent: "space-between",
+	                            alignItems: "center",
+	                            gap: 16,
+	                            flexWrap: "wrap",
+	                          }}
+	                        >
+	                          <div>
+	                            <div style={{ color: "#d1fae5", fontSize: 13, fontWeight: 900, marginBottom: 4 }}>
+	                              Scanner Report Ready
+	                            </div>
+	                            <div style={{ color: "#a7f3d0", fontSize: 12, lineHeight: 1.45 }}>
+	                              Download the clean 2-page PDF for this verified scanned package.
+	                            </div>
+	                          </div>
+	                          <button
+	                            onClick={downloadForensicReport}
+	                            style={{
+	                              padding: "10px 18px",
+	                              borderRadius: 8,
+	                              border: "none",
+	                              background: "#10b981",
+	                              color: "white",
+	                              cursor: "pointer",
+	                              fontSize: 12,
+	                              fontWeight: 800,
+	                              letterSpacing: 0.5,
+	                              textTransform: "uppercase",
+	                              boxShadow: "0 8px 20px rgba(16, 185, 129, 0.28)",
+	                              whiteSpace: "nowrap",
+	                            }}
+	                          >
+	                            Download Report PDF
+	                          </button>
+	                        </div>
+	                      </div>
+	                    </div>
+	                  ) : (
+	                    <div
+                        style={{
+                          background: "linear-gradient(135deg, #18181b 0%, #111827 100%)",
+                          border: "1px solid rgba(239, 68, 68, 0.35)",
+                          borderRadius: 18,
+                          overflow: "hidden",
+                          boxShadow: "0 18px 40px rgba(0, 0, 0, 0.28)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            padding: "22px 24px",
+                            borderBottom: "1px solid rgba(239, 68, 68, 0.18)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 16,
+                            flexWrap: "wrap",
+                            alignItems: "flex-start",
+                          }}
+                        >
+                          <div>
+                            <div style={{ color: "#fca5a5", fontSize: 11, fontWeight: 900, letterSpacing: 1.4, marginBottom: 6 }}>
+                              AUTHENTICATION FAILED
+                            </div>
+                            <h3 style={{ margin: 0, fontSize: 21, color: "#f4f4f5", fontWeight: 800 }}>
+                              Non-Phanix QR Detected
+                            </h3>
+                            <p style={{ margin: "8px 0 0", color: "#fca5a5", fontSize: 13, lineHeight: 1.55, maxWidth: 560 }}>
+                              The scanned content does not match the PHANIX forensic architecture. 
+                              This data could be malformed, external, or tampered with.
+                            </p>
+                          </div>
+                          <div
+                            style={{
+                              padding: "7px 12px",
+                              borderRadius: 20,
+                              background: "rgba(239, 68, 68, 0.12)",
+                              border: "1px solid rgba(239, 68, 68, 0.35)",
+                              color: "#fca5a5",
+                              fontSize: 11,
+                              fontWeight: 900,
+                              letterSpacing: 0.8,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            INVALID SIGNATURE
+                          </div>
+                        </div>
+
+                        <div style={{ padding: 24 }}>
+                          <div style={{ color: "#a1a1aa", fontSize: 11, fontWeight: 900, letterSpacing: 1, marginBottom: 10 }}>
+                            EXTRACTED DATA SUMMARY
+                          </div>
+                          <div
+                            style={{
+                              background: "rgba(239, 68, 68, 0.05)",
+                              border: "1px solid rgba(239, 68, 68, 0.15)",
+                              borderRadius: 10,
+                              padding: 18,
+                              marginBottom: 18,
+                            }}
+                          >
+                            <div style={{ color: "#f4f4f5", fontFamily: "monospace", fontSize: 13, wordBreak: "break-all", lineHeight: 1.6 }}>
+                              {scanResult.data}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              padding: "16px 18px",
+                              borderRadius: 10,
+                              background: "rgba(239, 68, 68, 0.08)",
+                              border: "1px solid rgba(239, 68, 68, 0.22)",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: 16,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <div>
+                              <div style={{ color: "#fecaca", fontSize: 13, fontWeight: 900, marginBottom: 4 }}>
+                                Failed Authentication Report
+                              </div>
+                              <div style={{ color: "#fca5a5", fontSize: 12, lineHeight: 1.45 }}>
+                                Download the forensic failure certificate for this scan event.
+                              </div>
+                            </div>
+                            <button
+                              onClick={downloadForensicReport}
+                              style={{
+                                padding: "10px 18px",
+                                borderRadius: 8,
+                                border: "none",
+                                background: "#ef4444",
+                                color: "white",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 800,
+                                letterSpacing: 0.5,
+                                textTransform: "uppercase",
+                                boxShadow: "0 8px 20px rgba(239, 68, 68, 0.28)",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Download Failed Report
+                            </button>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <h3 style={{ margin: "0 0 10px", fontSize: 16, color: '#f4f4f5' }}>Raw Content</h3>
-                      <div style={{ background: '#18181b', padding: 15, borderRadius: 8, fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>
-                        {scanResult.data}
-                      </div>
-                    </div>
-                  )}
+	                  )}
                 </div>
               )}
             </div>

@@ -978,7 +978,7 @@ END OF RECORD`.trim();
                 fontWeight: 400,
                 lineHeight: '1.2'
             }}>
-                Powered by.
+                Powered by the
             </div>
             <div style={{
                 color: accent,

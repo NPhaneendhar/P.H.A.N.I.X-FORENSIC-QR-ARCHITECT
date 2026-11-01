@@ -303,16 +303,25 @@ export default function ForensicQRGenerator() {
     try {
       await setDoc(doc(db, "evidence", id), {
         uuid: id,
+        status: "SEALED",
         hash: hash,
-        payloadString: payloadString,
-        caseNo: caseNumber.trim(),
-        exhibitNo: exhibitNumber.trim(),
-        operator: name.trim(),
-        badge: badge.trim(),
-        role: role.trim(),
-        createdAtLocal: timestamp,
+        ts: payload.ts,
         createdAt: serverTimestamp(),
-        status: "SEALED"
+        case: {
+          no: payload.caseNo,
+          exhibit: payload.exhibitNo,
+          division: payload.division,
+          priority: payload.priority,
+          seal: payload.seal,
+          source: payload.src
+        },
+        officer: {
+          name: payload.op,
+          badge: payload.bid,
+          role: payload.role,
+          receivedBy: payload.receivedBy
+        },
+        evidence: payload.sec
       });
       await addDoc(collection(db, "evidence", id, "history"), {
         action: "created",
@@ -324,7 +333,6 @@ export default function ForensicQRGenerator() {
       setLoading(false);
       return;
     }
-
     const formattedReport = `
 
          ██ P.H.A.N.I.X ██
@@ -997,8 +1005,37 @@ END OF RECORD`.trim();
           return;
         }
         const record = snap.data();
-        const recalculated = CryptoJS.SHA256(record.payloadString).toString();
-        const payload = JSON.parse(record.payloadString);
+        // rebuild the exact data that was hashed
+        let payload = null;
+        let hashText = "";
+        if (record.payloadString) {
+          // oldest records
+          payload = JSON.parse(record.payloadString);
+          hashText = record.payloadString;
+        } else if (record.case) {
+          // new grouped records
+          payload = {
+            op: record.officer.name,
+            bid: record.officer.badge,
+            role: record.officer.role,
+            caseNo: record.case.no,
+            exhibitNo: record.case.exhibit,
+            division: record.case.division,
+            receivedBy: record.officer.receivedBy,
+            seal: record.case.seal,
+            priority: record.case.priority,
+            src: record.case.source,
+            uid: record.uuid,
+            ts: record.ts,
+            sec: record.evidence.map((e) => ({ title: e.title, content: e.content }))
+          };
+          hashText = JSON.stringify(payload);
+        } else {
+          setValidationError("This record has an old format. Generate a new one.");
+          return;
+        }
+        const recalculated = CryptoJS.SHA256(hashText).toString();
+
         const dbData = { hash: record.hash, data: payload };
         if (recalculated !== record.hash) {
           setScanResult({ type: 'failed', data: content });
@@ -1017,7 +1054,6 @@ END OF RECORD`.trim();
       }
       return;
     }
-
     let phanixData = null;
 
     const isPhanix = content.includes("FORENSIC-QR-ARCHITECT") && content.includes("[ CRYPTOGRAPHIC SIGNATURE ]") && content.includes("SHA-256 HASH:");

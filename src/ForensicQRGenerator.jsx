@@ -9,8 +9,8 @@ import jsQR from "jsqr";
 import { jsPDF } from "jspdf";
 import phanixLogo from "./assets/phanix_logo.png";
 import { db, auth } from "./firebase";
-import { doc, setDoc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { signInAnonymously } from "firebase/auth";
+import { doc, setDoc, getDoc, getDocs, addDoc, collection, query, where, orderBy, limit, serverTimestamp } from "firebase/firestore";
+import { signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 
 /**
  * P.H.A.N.I.X FORENSIC-QR-ARCHITECT
@@ -71,6 +71,17 @@ const ipUrl = /^(https?:\/\/)?((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2
 export default function ForensicQRGenerator() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [tab, setTab] = useState("generator");
+
+  // ADMIN DASHBOARD (only the admin email can read the full list, enforced by Firestore rules)
+  const [adminUser, setAdminUser] = useState(null);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPass, setAdminPass] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [caseSearch, setCaseSearch] = useState("");
+  const [adminList, setAdminList] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminPicked, setAdminPicked] = useState(null);
+  const [adminHistory, setAdminHistory] = useState([]);
   const [name, setName] = useState("");
   const [badge, setBadge] = useState("");
   const [role, setRole] = useState("");
@@ -113,7 +124,7 @@ export default function ForensicQRGenerator() {
   const triggerIconPulse = () => {
     setIsIconPulsing(true);
     setTimeout(() => setIsIconPulsing(false), 2000);
-
+    
     // Smooth scroll if needed, though usually in view
     aboutIconRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -151,6 +162,54 @@ export default function ForensicQRGenerator() {
     signInAnonymously(auth).catch((e) => console.error("Firebase sign-in failed", e));
   }, []);
 
+  // ADMIN: know who is logged in (anonymous visitors have no email)
+  useEffect(() => {
+    const stop = onAuthStateChanged(auth, (user) => {
+      setAdminUser(user && user.email ? user : null);
+    });
+    return () => stop();
+  }, []);
+
+  // ADMIN: load the list of evidence (all, or one case number)
+  const loadAdminList = async (caseNo) => {
+    setAdminLoading(true);
+    setAdminError("");
+    setAdminPicked(null);
+    try {
+      let q = null;
+      if (caseNo.trim()) {
+        q = query(collection(db, "evidence"), where("case.no", "==", caseNo.trim()), limit(100));
+      } else {
+        q = query(collection(db, "evidence"), orderBy("createdAt", "desc"), limit(100));
+      }
+      const snap = await getDocs(q);
+      setAdminList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      setAdminError("Could not load: " + e.message);
+    }
+    setAdminLoading(false);
+  };
+
+  // ADMIN: open one record and load its history
+  const openAdminRecord = async (item) => {
+    setAdminPicked(item);
+    setAdminHistory([]);
+    try {
+      const snap = await getDocs(query(collection(db, "evidence", item.id, "history"), orderBy("time", "desc"), limit(50)));
+      setAdminHistory(snap.docs.map((d) => d.data()));
+    } catch (e) {
+      setAdminError("Could not load history: " + e.message);
+    }
+  };
+
+  // ADMIN: load the list when the admin opens the tab
+  useEffect(() => {
+    if (tab === "admin" && adminUser) {
+      loadAdminList("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, adminUser]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const reportParam = params.get("r");
@@ -183,30 +242,30 @@ export default function ForensicQRGenerator() {
      * Enumerate devices and initialize the selected stream.
      */
     let controls;
-
+    
     const startScanner = async () => {
       try {
         const devices = await codeReaderRef.current.listVideoInputDevices();
         setVideoDevices(devices);
-
+        
         if (devices.length === 0) {
           throw new Error("No video devices discovered.");
         }
 
         // Auto-select back camera on first run
         if (!hasDefaultedCamera && devices.length > 1) {
-          const backCameraIndex = devices.findIndex(device =>
-            device.label.toLowerCase().includes('back') ||
+          const backCameraIndex = devices.findIndex(device => 
+            device.label.toLowerCase().includes('back') || 
             device.label.toLowerCase().includes('rear') ||
             device.label.toLowerCase().includes('environment')
           );
-
+          
           if (backCameraIndex !== -1 && backCameraIndex !== selectedDeviceIndex) {
             setSelectedDeviceIndex(backCameraIndex);
             setHasDefaultedCamera(true);
             return; // Effect will re-run with correct index
           }
-          setHasDefaultedCamera(true);
+           setHasDefaultedCamera(true);
         }
 
         // Validate index
@@ -269,8 +328,8 @@ export default function ForensicQRGenerator() {
     const id = uuidv4();
     const timestamp = new Date().toISOString();
 
-    const finalEvidenceSource = locationDetails
-      ? `${evidenceSource} [ ${locationDetails} ]`
+    const finalEvidenceSource = locationDetails 
+      ? `${evidenceSource} [ ${locationDetails} ]` 
       : evidenceSource;
 
     // CANONICALIZATION PIPELINE
@@ -302,26 +361,26 @@ export default function ForensicQRGenerator() {
     // SAVE EVIDENCE RECORD TO DATABASE (write-once, rules block edit/delete)
     try {
       await setDoc(doc(db, "evidence", id), {
-        uuid: id,
-        status: "SEALED",
-        hash: hash,
-        ts: payload.ts,
-        createdAt: serverTimestamp(),
-        case: {
-          no: payload.caseNo,
-          exhibit: payload.exhibitNo,
-          division: payload.division,
-          priority: payload.priority,
-          seal: payload.seal,
-          source: payload.src
+        uuid      : id,
+        status    : "SEALED",
+        hash      : hash,
+        ts        : payload.ts,
+        createdAt : serverTimestamp(),
+        case      : {
+          no       : payload.caseNo,
+          exhibit  : payload.exhibitNo,
+          division : payload.division,
+          priority : payload.priority,
+          seal     : payload.seal,
+          source   : payload.src
         },
-        officer: {
-          name: payload.op,
-          badge: payload.bid,
-          role: payload.role,
-          receivedBy: payload.receivedBy
+        officer   : {
+          name       : payload.op,
+          badge      : payload.bid,
+          role       : payload.role,
+          receivedBy : payload.receivedBy
         },
-        evidence: payload.sec
+        evidence  : payload.sec
       });
       await addDoc(collection(db, "evidence", id, "history"), {
         action: "created",
@@ -333,6 +392,7 @@ export default function ForensicQRGenerator() {
       setLoading(false);
       return;
     }
+
     const formattedReport = `
 
          ██ P.H.A.N.I.X ██
@@ -800,7 +860,7 @@ END OF RECORD`.trim();
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
+    
     setValidationError("");
     setScanResult(null);
     setScanInput("");
@@ -820,7 +880,7 @@ END OF RECORD`.trim();
         canvas.width = img.width + (padding * 2);
         canvas.height = img.height + (padding * 2);
         const ctx = canvas.getContext('2d');
-
+        
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, padding, padding);
@@ -847,11 +907,11 @@ END OF RECORD`.trim();
             const sCtx = scaledCanvas.getContext('2d');
             sCtx.filter = 'contrast(1.2) brightness(1.1) grayscale(1)';
             sCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-
+            
             const scaledImageData = sCtx.getImageData(0, 0, scaledCanvas.width, scaledCanvas.height);
             const scaledCode = jsQR(scaledImageData.data, scaledImageData.width, scaledImageData.height);
             if (scaledCode) return scaledCode.data;
-
+            
             throw new Error("Decoding Failure");
           }
         };
@@ -883,7 +943,7 @@ END OF RECORD`.trim();
    */
   const performForensicAnalysis = (rawData, phanixData = null, verdict = null) => {
     const ts = new Date().toISOString();
-
+    
     // Initial State
     let hash = CryptoJS.SHA256(rawData).toString();
     let classification = "Generic Data / Plaintext";
@@ -903,7 +963,7 @@ END OF RECORD`.trim();
     if (phanixData) {
       classification = "PHANIX Secure Package";
       hash = phanixData.hash; // Use the internal signature hash extracted from text
-
+      
       if (verdict === "TAMPERED") {
         trustStatus = "TAMPERED PACKAGE";
         trustDescription = "The data does not match its SHA-256 hash or the hash stored in the evidence database. This record was modified.";
@@ -955,7 +1015,7 @@ END OF RECORD`.trim();
         { label: "Internal Hash Check", status: "SKIP" },
         { label: "Authenticity Seal", status: "NONE" }
       ];
-
+      
       if (ipUrl.test(rawData)) {
         riskLevel = "HIGH";
         trustStatus = "HIGH RISK SOURCE";
@@ -1005,15 +1065,13 @@ END OF RECORD`.trim();
           return;
         }
         const record = snap.data();
-        // rebuild the exact data that was hashed
+        // rebuild the exact data that was hashed (old records still have payloadString)
         let payload = null;
         let hashText = "";
         if (record.payloadString) {
-          // oldest records
           payload = JSON.parse(record.payloadString);
           hashText = record.payloadString;
         } else if (record.case) {
-          // new grouped records
           payload = {
             op: record.officer.name,
             bid: record.officer.badge,
@@ -1031,11 +1089,24 @@ END OF RECORD`.trim();
           };
           hashText = JSON.stringify(payload);
         } else {
-          setValidationError("This record has an old format. Generate a new one.");
-          return;
+          payload = {
+            op: record.operator,
+            bid: record.badge,
+            role: record.role,
+            caseNo: record.caseNo,
+            exhibitNo: record.exhibitNo,
+            division: record.division,
+            receivedBy: record.receivedBy,
+            seal: record.seal,
+            priority: record.priority,
+            src: record.source,
+            uid: record.uuid,
+            ts: record.ts,
+            sec: record.evidence.map((e) => ({ title: e.title, content: e.content }))
+          };
+          hashText = JSON.stringify(payload);
         }
         const recalculated = CryptoJS.SHA256(hashText).toString();
-
         const dbData = { hash: record.hash, data: payload };
         if (recalculated !== record.hash) {
           setScanResult({ type: 'failed', data: content });
@@ -1046,7 +1117,7 @@ END OF RECORD`.trim();
           action: "verified",
           result: "VERIFIED",
           time: serverTimestamp()
-        }).catch(() => { });
+        }).catch(() => {});
         setScanResult({ type: 'valid', data: payload, hash: record.hash });
         performForensicAnalysis(content, dbData, null);
       } catch (e) {
@@ -1054,6 +1125,7 @@ END OF RECORD`.trim();
       }
       return;
     }
+
     let phanixData = null;
 
     const isPhanix = content.includes("FORENSIC-QR-ARCHITECT") && content.includes("[ CRYPTOGRAPHIC SIGNATURE ]") && content.includes("SHA-256 HASH:");
@@ -1086,7 +1158,7 @@ END OF RECORD`.trim();
 
       const manifestStart = lines.findIndex(l => l.includes("[ EVIDENCE MANIFEST ]"));
       const sigStart = lines.findIndex(l => l.includes("[ CRYPTOGRAPHIC SIGNATURE ]"));
-
+      
       let extractedSec = [];
       if (manifestStart !== -1 && sigStart !== -1) {
         // skip the "=====" separator line that sits right before the signature block
@@ -1094,7 +1166,7 @@ END OF RECORD`.trim();
         const sectionLines = lines.slice(manifestStart + 1, manifestEnd);
         let currentTitle = "";
         let currentContentLines = [];
-
+        
         sectionLines.forEach(line => {
           if (line.trim().startsWith("#") && line.includes("::")) {
             if (currentTitle) extractedSec.push({ title: currentTitle, content: currentContentLines.join("\n").trim() });
@@ -1129,7 +1201,7 @@ END OF RECORD`.trim();
             sec: extractedSec
           }
         };
-
+        
         // FIX 1: recalculate the hash from the printed data (same key order as generatePackage)
         const rebuilt = {
           op: extractedOp,
@@ -1250,16 +1322,16 @@ END OF RECORD`.trim();
           gap: '20px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <img
-              src={phanixLogo}
-              alt="PHANIX"
-              style={{
-                width: '45px',
-                height: '45px',
+            <img 
+              src={phanixLogo} 
+              alt="PHANIX" 
+              style={{ 
+                width: '45px', 
+                height: '45px', 
                 borderRadius: '50%',
                 boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
                 border: `2px solid ${accent}`
-              }}
+              }} 
             />
             <span style={{
               position: 'relative',
@@ -1274,33 +1346,33 @@ END OF RECORD`.trim();
               FORENSIC-QR-ARCHITECT
             </span>
           </div>
-
+          
           <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            borderLeft: '1px solid #3f3f46',
-            paddingLeft: '20px',
-            height: '42px'
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              borderLeft: '1px solid #3f3f46',
+              paddingLeft: '20px',
+              height: '42px'
           }}>
             <div style={{
-              fontSize: '11px',
-              color: '#a1a1aa',
-              letterSpacing: '0.2px',
-              fontWeight: 400,
-              lineHeight: '1.2'
+                fontSize: '11px',
+                color: '#a1a1aa',
+                letterSpacing: '0.2px',
+                fontWeight: 400,
+                lineHeight: '1.2'
             }}>
-              Powered by
+                Powered by
             </div>
             <div style={{
-              color: accent,
-              fontWeight: 700,
-              fontSize: '14px',
-              letterSpacing: '1px',
-              lineHeight: '1.4',
-              textTransform: 'uppercase'
+                color: accent,
+                fontWeight: 700,
+                fontSize: '14px',
+                letterSpacing: '1px',
+                lineHeight: '1.4',
+                textTransform: 'uppercase'
             }}>
-              P.H.A.N.I.X
+                P.H.A.N.I.X 
             </div>
           </div>
         </div>
@@ -1331,13 +1403,13 @@ END OF RECORD`.trim();
                 PHANIX
               </h1>
               <p style={{ margin: "8px 0 0", color: "#a1a1aa", fontSize: 16, maxWidth: 500, lineHeight: 1.6 }}>
-                <strong style={{ color: accent }}>Professional High-Accuracy for Investigative eXcellence</strong>.
-                Deploying advanced digital integrity protocols for the modern forensic workflow.
-                Visit <span
+                <strong style={{ color: accent }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
+                Deploying advanced digital integrity protocols for the modern forensic workflow. 
+                Visit <span 
                   onClick={triggerIconPulse}
-                  style={{
-                    color: accent,
-                    cursor: 'pointer',
+                  style={{ 
+                    color: accent, 
+                    cursor: 'pointer', 
                     textDecoration: 'underline',
                     fontWeight: 600,
                     transition: 'all 0.2s'
@@ -1350,7 +1422,7 @@ END OF RECORD`.trim();
 
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
 
-              {/* i need to channge the link here ok  */}
+               {/* i need to channge the link here ok  */}
               {/* ABOUT PHANIX */}
               <a
                 ref={aboutIconRef}
@@ -1387,8 +1459,8 @@ END OF RECORD`.trim();
               >
                 {/* UPGRADED PHANIX BRAND SIGNATURE */}
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M7 21V3H14C16.2091 3 18 4.79086 18 7C18 9.20914 16.2091 11 14 11H7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M15 3C15 3 19 3 20 6C21 9 18 11 18 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M7 21V3H14C16.2091 3 18 4.79086 18 7C18 9.20914 16.2091 11 14 11H7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M15 3C15 3 19 3 20 6C21 9 18 11 18 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   <circle cx="12" cy="7" r="1.5" fill={accent} />
                   <path d="M3 3L5 5" stroke={accent} strokeWidth="2" strokeLinecap="round" />
                 </svg>
@@ -1426,7 +1498,7 @@ END OF RECORD`.trim();
                 >
                   {/* HIGH-TECH FORENSIC EXPERT BADGE */}
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(59,130,246,0.2)" stroke={accent} />
+                    <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(59,130,246,0.2)" stroke={accent}/>
                     <circle cx="12" cy="11" r="3" stroke={accent} strokeWidth="1.5" />
                     <path d="M7 16V16.5C7 18.5 12 20 12 20C12 20 17 18.5 17 16.5V16" stroke={accent} strokeWidth="1.5" />
                     <line x1="12" y1="8" x2="12" y2="8" stroke={accent} strokeWidth="3" strokeLinecap="round" />
@@ -1454,29 +1526,29 @@ END OF RECORD`.trim();
             gap: "15px"
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '6px',
-                background: 'rgba(59, 130, 246, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: accent,
-                fontSize: '16px',
-                fontWeight: 700
-              }}>
-                P
-              </div>
-              <div>
-                <h3 style={{ margin: "0 0 2px", fontSize: 14, color: "#f4f4f5", fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  Phaneendhar Investigation Expert
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
-                </h3>
-                <p style={{ margin: 0, fontSize: 13, color: "#a1a1aa" }}>
-                  Advanced tools for helping forensic integrity.
-                </p>
-              </div>
+                <div style={{ 
+                    width: '36px', 
+                    height: '36px', 
+                    borderRadius: '6px', 
+                    background: 'rgba(59, 130, 246, 0.15)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: accent,
+                    fontSize: '16px',
+                    fontWeight: 700
+                }}>
+                    P
+                </div>
+                <div>
+                    <h3 style={{ margin: "0 0 2px", fontSize: 14, color: "#f4f4f5", fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Phaneendhar Investigation Expert
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 13, color: "#a1a1aa" }}>
+                        Advanced tools for helping forensic integrity.
+                    </p>
+                </div>
             </div>
 
             <a
@@ -1514,34 +1586,34 @@ END OF RECORD`.trim();
         {/* TABS */}
         {tab !== "viewer" && (
           <div
-            style={{
-              display: "flex",
-              background: "transparent",
-              padding: "0 0 10px 0",
-              borderBottom: "1px solid #3f3f46",
-              marginBottom: 30,
-              gap: 10
-            }}
-          >
-            {["generator", "scanner", "insights"].map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                style={{
-                  padding: "8px 24px",
-                  borderRadius: "18px",
-                  border: "none",
-                  background: tab === t ? accent : "transparent",
-                  color: tab === t ? "white" : "#a1a1aa",
-                  fontWeight: 500,
-                  fontSize: 14,
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                {t === "generator" ? "Evidence Generator" : t === "scanner" ? "QR Scanner" : "Forensic Insights"}
-              </button>
-            ))}
+          style={{
+            display: "flex",
+            background: "transparent",
+            padding: "0 0 10px 0",
+            borderBottom: "1px solid #3f3f46",
+            marginBottom: 30,
+            gap: 10
+          }}
+        >
+          {["generator", "scanner", "insights", "admin"].map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                padding: "8px 24px",
+                borderRadius: "18px",
+                border: "none",
+                background: tab === t ? accent : "transparent",
+                color: tab === t ? "white" : "#a1a1aa",
+                fontWeight: 500,
+                fontSize: 14,
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+              }}
+            >
+              {t === "generator" ? "Evidence Generator" : t === "scanner" ? "QR Scanner" : t === "insights" ? "Forensic Insights" : "Admin"}
+            </button>
+          ))}
           </div>
         )}
 
@@ -1806,146 +1878,146 @@ END OF RECORD`.trim();
                 >
                   EVIDENCE TAKEN FROM
                 </label>
-
+                
                 <div style={{ position: 'relative' }}>
-                  <input
-                    placeholder="Select or enter evidence source location"
-                    value={evidenceSource}
-                    onChange={(e) => {
-                      setEvidenceSource(e.target.value);
-                      setIsLocationOpen(true);
-                    }}
-                    onFocus={() => setIsLocationOpen(true)}
-                    onBlur={() => setTimeout(() => setIsLocationOpen(false), 200)}
-                    style={{
-                      padding: "12px 16px",
-                      borderRadius: 4,
-                      background: "#18181b",
-                      border: "1px solid #52525b",
-                      color: "#f4f4f5",
-                      outline: "none",
-                      fontSize: 14,
-                      transition: "all 0.2s",
-                      width: "100%",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                  <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a1a1aa', fontSize: 10 }}>▼</div>
-
-                  {isLocationOpen && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      background: '#27272a',
-                      border: '1px solid #3f3f46',
-                      borderRadius: '4px',
-                      marginTop: '4px',
-                      maxHeight: '200px',
-                      overflowY: 'auto',
-                      zIndex: 1000,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                    }}>
-                      {EVIDENCE_LOCATIONS.filter(loc =>
-                        !evidenceSource || loc.toLowerCase().includes(evidenceSource.toLowerCase())
-                      ).map(loc => (
-                        <div
-                          key={loc}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setEvidenceSource(loc);
-                            setIsLocationOpen(false);
-                            setLocationDetails("");
-                          }}
-                          style={{
-                            padding: '10px 12px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            color: '#f4f4f5',
-                            borderBottom: '1px solid #3f3f46'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#3f3f46'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                        >
-                          {loc}
+                    <input
+                      placeholder="Select or enter evidence source location"
+                      value={evidenceSource}
+                      onChange={(e) => {
+                          setEvidenceSource(e.target.value);
+                          setIsLocationOpen(true);
+                      }}
+                      onFocus={() => setIsLocationOpen(true)}
+                      onBlur={() => setTimeout(() => setIsLocationOpen(false), 200)}
+                      style={{
+                        padding: "12px 16px",
+                        borderRadius: 4,
+                        background: "#18181b",
+                        border: "1px solid #52525b",
+                        color: "#f4f4f5",
+                        outline: "none",
+                        fontSize: 14,
+                        transition: "all 0.2s",
+                        width: "100%",
+                        boxSizing: "border-box"
+                      }}
+                    />
+                    <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a1a1aa', fontSize: 10 }}>▼</div>
+                    
+                    {isLocationOpen && (
+                        <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            background: '#27272a',
+                            border: '1px solid #3f3f46',
+                            borderRadius: '4px',
+                            marginTop: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                        }}>
+                            {EVIDENCE_LOCATIONS.filter(loc => 
+                                !evidenceSource || loc.toLowerCase().includes(evidenceSource.toLowerCase())
+                            ).map(loc => (
+                                <div 
+                                    key={loc}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        setEvidenceSource(loc);
+                                        setIsLocationOpen(false);
+                                        setLocationDetails("");
+                                    }}
+                                    style={{
+                                        padding: '10px 12px',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        color: '#f4f4f5',
+                                        borderBottom: '1px solid #3f3f46'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = '#3f3f46'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                >
+                                    {loc}
+                                </div>
+                            ))}
+                            {EVIDENCE_LOCATIONS.filter(loc => !evidenceSource || loc.toLowerCase().includes(evidenceSource.toLowerCase())).length === 0 && (
+                                <div style={{ padding: '10px 12px', fontSize: 13, color: '#71717a' }}>No presets found. Using custom value.</div>
+                            )}
                         </div>
-                      ))}
-                      {EVIDENCE_LOCATIONS.filter(loc => !evidenceSource || loc.toLowerCase().includes(evidenceSource.toLowerCase())).length === 0 && (
-                        <div style={{ padding: '10px 12px', fontSize: 13, color: '#71717a' }}>No presets found. Using custom value.</div>
-                      )}
-                    </div>
-                  )}
+                    )}
                 </div>
 
                 {evidenceSource && (
                   <div style={{ animation: "fadeIn 0.3s ease", marginTop: 8 }}>
-                    <label style={{ fontSize: 10, color: accent, fontWeight: 600, marginBottom: 4, display: 'block', letterSpacing: 0.5 }}>
-                      {evidenceSource === "Police Station" ? "STATION DETAILS" :
-                        evidenceSource === "Other" ? "SPECIFY LOCATION" :
-                          `DETAILS FOR ${evidenceSource.toUpperCase()}`}
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <textarea
-                        ref={detailsRef}
-                        placeholder={
-                          evidenceSource === "Police Station" ? "Enter police station / unit name" :
-                            "Enter specific room, area, landmark, or custody notes"
-                        }
-                        value={locationDetails}
-                        onChange={(e) => {
-                          setLocationDetails(e.target.value);
-                          e.target.style.height = "auto";
-                          e.target.style.height = `${e.target.scrollHeight}px`;
-                        }}
-                        style={{
-                          padding: "12px 16px",
-                          paddingRight: "35px",
-                          borderRadius: 4,
-                          background: "rgba(59, 130, 246, 0.1)",
-                          border: `1px solid ${accent}`,
-                          color: "#f4f4f5",
-                          outline: "none",
-                          fontSize: 14,
-                          width: "100%",
-                          boxSizing: "border-box",
-                          minHeight: "80px",
-                          resize: "none",
-                          overflow: "hidden",
-                          fontFamily: "inherit"
-                        }}
-                      />
-                      {locationDetails && (
-                        <button
-                          onClick={() => {
-                            setLocationDetails("");
-                            if (detailsRef.current) {
-                              detailsRef.current.style.height = "auto";
-                            }
+                      <label style={{ fontSize: 10, color: accent, fontWeight: 600, marginBottom: 4, display: 'block', letterSpacing: 0.5 }}>
+                        {evidenceSource === "Police Station" ? "STATION DETAILS" : 
+                         evidenceSource === "Other" ? "SPECIFY LOCATION" : 
+                         `DETAILS FOR ${evidenceSource.toUpperCase()}`}
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <textarea
+                          ref={detailsRef}
+                          placeholder={
+                              evidenceSource === "Police Station" ? "Enter police station / unit name" :
+                              "Enter specific room, area, landmark, or custody notes"
+                          }
+                          value={locationDetails}
+                          onChange={(e) => {
+                            setLocationDetails(e.target.value);
+                            e.target.style.height = "auto";
+                            e.target.style.height = `${e.target.scrollHeight}px`;
                           }}
                           style={{
-                            position: "absolute",
-                            right: 8,
-                            top: 8,
-                            background: "transparent",
-                            border: "none",
-                            color: accent,
-                            fontSize: 18,
-                            cursor: "pointer",
-                            padding: 4,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            opacity: 0.7,
+                            padding: "12px 16px",
+                            paddingRight: "35px",
+                            borderRadius: 4,
+                            background: "rgba(59, 130, 246, 0.1)",
+                            border: `1px solid ${accent}`,
+                            color: "#f4f4f5",
+                            outline: "none",
+                            fontSize: 14,
+                            width: "100%",
+                            boxSizing: "border-box",
+                            minHeight: "80px",
+                            resize: "none",
+                            overflow: "hidden",
+                            fontFamily: "inherit"
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
-                          onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
-                          title="Clear Details"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
+                        />
+                        {locationDetails && (
+                          <button
+                            onClick={() => {
+                              setLocationDetails("");
+                              if (detailsRef.current) {
+                                detailsRef.current.style.height = "auto";
+                              }
+                            }}
+                            style={{
+                              position: "absolute",
+                              right: 8,
+                              top: 8,
+                              background: "transparent",
+                              border: "none",
+                              color: accent,
+                              fontSize: 18,
+                              cursor: "pointer",
+                              padding: 4,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              opacity: 0.7,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+                            onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
+                            title="Clear Details"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                   </div>
                 )}
               </div>
@@ -2161,55 +2233,55 @@ END OF RECORD`.trim();
                 </div>
               )}
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={clearForm}
-                  disabled={loading}
-                  style={{
-                    flex: 1,
-                    padding: "10px 24px",
-                    borderRadius: "24px",
-                    background: "transparent",
-                    border: "1px solid #52525b",
-                    color: "#f4f4f5",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    cursor: loading ? "not-allowed" : "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  CLEAR FORM
-                </button>
-                <button
-                  onClick={generatePackage}
-                  disabled={loading}
-                  style={{
-                    flex: 2,
-                    padding: "10px 24px",
-                    borderRadius: "24px",
-                    background: loading ? "#3f3f46" : accent,
-                    border: "none",
-                    color: "white",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    cursor: loading ? "not-allowed" : "pointer",
-                    transition: "all 0.2s ease",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!loading) {
-                      e.currentTarget.style.boxShadow = "0 1px 3px 1px rgba(0,0,0,0.3)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!loading) {
-                      e.currentTarget.style.boxShadow = "none";
-                    }
-                  }}
-                >
-                  {loading ? "PROCESSING..." : "GENERATE SECURE PACKAGE"}
-                </button>
+              <button
+                onClick={clearForm}
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: "10px 24px",
+                  borderRadius: "24px",
+                  background: "transparent",
+                  border: "1px solid #52525b",
+                  color: "#f4f4f5",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                CLEAR FORM
+              </button>
+              <button
+                onClick={generatePackage}
+                disabled={loading}
+                style={{
+                  flex: 2,
+                  padding: "10px 24px",
+                  borderRadius: "24px",
+                  background: loading ? "#3f3f46" : accent,
+                  border: "none",
+                  color: "white",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.boxShadow = "0 1px 3px 1px rgba(0,0,0,0.3)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.boxShadow = "none";
+                  }
+                }}
+              >
+                {loading ? "PROCESSING..." : "GENERATE SECURE PACKAGE"}
+              </button>
               </div>
             </div>
 
@@ -2267,19 +2339,19 @@ END OF RECORD`.trim();
                 }}>
                   {/* Animated glow effect */}
 
-
+                  
                   <div ref={qrRef}>
-                    <QRCodeCanvas
-                      value={manifest ? "PHANIX:" + manifest.id : qrData}
-                      level="M"
-                      size={350}
-                      bgColor="#ffffff"
-                      fgColor="#000000"
-                      includeMargin={true}
-                      style={{
+                    <QRCodeCanvas 
+                      value={manifest ? "PHANIX:" + manifest.id : qrData} 
+                      level="M" 
+                      size={350} 
+                      bgColor="#ffffff" 
+                      fgColor="#000000" 
+                      includeMargin={true} 
+                      style={{ 
                         borderRadius: 8,
                         display: "block"
-                      }}
+                      }} 
                     />
                   </div>
                 </div>
@@ -2303,8 +2375,8 @@ END OF RECORD`.trim();
                     boxShadow: "none",
                     animation: "pulse 2s ease-in-out infinite"
                   }} />
-                  <h3 style={{
-                    margin: 0,
+                  <h3 style={{ 
+                    margin: 0, 
                     fontSize: "16px",
                     fontWeight: 600,
                     color: "#0f2a86ff",
@@ -2314,9 +2386,9 @@ END OF RECORD`.trim();
                   </h3>
                 </div>
 
-                <p style={{
-                  margin: "12px 0 0",
-                  color: "#93c5fd",
+                <p style={{ 
+                  margin: "12px 0 0", 
+                  color: "#93c5fd", 
                   fontSize: 13,
                   fontWeight: 500,
                   letterSpacing: "0.5px",
@@ -2359,7 +2431,7 @@ END OF RECORD`.trim();
                       borderRadius: 4,
                       border: "1px solid #52525b",
                       background: "transparent",
-
+                 
                       color: "black",
                       cursor: "pointer",
                       fontWeight: 500,
@@ -2524,8 +2596,8 @@ END OF RECORD`.trim();
         {/* SCANNER */}
         {tab === "scanner" && (
           <div style={{ animation: "fadeIn 0.5s ease" }}>
-            <div style={{
-              ...materialCardStyle,
+            <div style={{ 
+              ...materialCardStyle, 
               padding: 40,
               background: "linear-gradient(135deg, #18181b 0%, #27272a 50%, #18181b 100%)",
               border: "1px solid rgba(59, 130, 246, 0.2)",
@@ -2543,26 +2615,26 @@ END OF RECORD`.trim();
                 borderRadius: "50%",
                 pointerEvents: "none"
               }} />
-
+              
               {/* Header */}
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "15px",
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "15px", 
                 marginBottom: "10px",
                 position: "relative",
                 zIndex: 1
               }}>
-                <h2 style={{
-                  margin: 0,
-                  fontSize: 24,
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: 24, 
                   color: "#f4f4f5",
                   fontWeight: 600,
                   letterSpacing: "0.5px"
                 }}>
                   QR Evidence Scanner
                 </h2>
-
+                
                 {/* System Status Badge */}
                 <div style={{
                   display: 'flex',
@@ -2592,11 +2664,11 @@ END OF RECORD`.trim();
                   </span>
                 </div>
               </div>
-
-              <p style={{
-                color: "#a1a1aa",
-                fontSize: 14,
-                marginBottom: 30,
+              
+              <p style={{ 
+                color: "#a1a1aa", 
+                fontSize: 14, 
+                marginBottom: 30, 
                 lineHeight: 1.6,
                 position: "relative",
                 zIndex: 1,
@@ -2630,7 +2702,7 @@ END OF RECORD`.trim();
                       animation: 'shimmer 3s infinite',
                       pointerEvents: 'none'
                     }} />
-
+                    
                     {/* Header */}
                     <div style={{
                       padding: '24px 28px',
@@ -2653,11 +2725,11 @@ END OF RECORD`.trim();
                           animation: 'pulse 2s infinite'
                         }}>
                           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                            <path d="M12 12v10" strokeWidth="3" />
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                            <path d="M12 12v10" strokeWidth="3"/>
                           </svg>
                         </div>
-
+                        
                         <div style={{ flex: 1 }}>
                           <div style={{
                             fontSize: '22px',
@@ -2678,7 +2750,7 @@ END OF RECORD`.trim();
                             Pattern unreadable or malformed
                           </div>
                         </div>
-
+                        
                         <div style={{
                           background: 'rgba(239, 68, 68, 0.2)',
                           padding: '6px 16px',
@@ -2694,7 +2766,7 @@ END OF RECORD`.trim();
                         </div>
                       </div>
                     </div>
-
+                    
                     {/* Content */}
                     <div style={{ padding: '28px', position: 'relative', zIndex: 1 }}>
                       {/* Error Details */}
@@ -2723,7 +2795,7 @@ END OF RECORD`.trim();
                         }}>
                           The QR code pattern could not be decoded. The image may be damaged, incomplete, or not contain a valid QR code structure.
                         </div>
-
+                        
                         {/* Verification Checklist */}
                         <div style={{
                           background: 'rgba(0,0,0,0.3)',
@@ -2773,7 +2845,7 @@ END OF RECORD`.trim();
                           ))}
                         </div>
                       </div>
-
+                      
                       {/* Troubleshooting Tips */}
                       <div style={{
                         background: 'rgba(59, 130, 246, 0.05)',
@@ -2860,7 +2932,7 @@ END OF RECORD`.trim();
                         <span>⬇️</span> DOWNLOAD FAILURE REPORT
                       </button>
                     </div>
-
+                    
                     {/* Background watermark */}
                     <div style={{
                       position: 'absolute',
@@ -2879,322 +2951,322 @@ END OF RECORD`.trim();
               )}
 
               {isCameraActive && (
-                <div style={{
-                  marginBottom: 25,
-                  borderRadius: 16,
-                  overflow: 'hidden',
-                  position: 'relative',
-                  background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)',
+                <div style={{ 
+                  marginBottom: 25, 
+                  borderRadius: 16, 
+                  overflow: 'hidden', 
+                  position: 'relative', 
+                  background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)', 
                   boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
                   border: "2px solid rgba(59, 130, 246, 0.4)"
                 }}>
-                  <video ref={videoRef} style={{ width: '100%', display: 'block', opacity: 0.95 }} />
-
-                  {/* Dark overlay with cutout */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: '260px',
-                    height: '260px',
-                    boxShadow: '0 0 0 9999px rgba(0,0,0,0.75)',
-                    borderRadius: '24px',
-                    pointerEvents: 'none'
-                  }}></div>
-
-                  {/* Scanner Frame with Phanix styling */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: '260px',
-                    height: '260px',
-                    border: `3px solid ${accent}`,
-                    borderRadius: '24px',
-                    boxShadow: `0 0 30px ${accent}, inset 0 0 20px rgba(59, 130, 246, 0.2)`,
-                    pointerEvents: 'none',
-                    overflow: 'hidden',
-                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%)'
-                  }}>
-                    {/* Corner accents */}
-                    <div style={{
-                      position: 'absolute',
-                      top: -2,
-                      left: -2,
-                      width: '40px',
-                      height: '40px',
-                      borderTop: `4px solid #60a5fa`,
-                      borderLeft: `4px solid #60a5fa`,
-                      borderTopLeftRadius: '24px'
-                    }} />
-                    <div style={{
-                      position: 'absolute',
-                      top: -2,
-                      right: -2,
-                      width: '40px',
-                      height: '40px',
-                      borderTop: `4px solid #60a5fa`,
-                      borderRight: `4px solid #60a5fa`,
-                      borderTopRightRadius: '24px'
-                    }} />
-                    <div style={{
-                      position: 'absolute',
-                      bottom: -2,
-                      left: -2,
-                      width: '40px',
-                      height: '40px',
-                      borderBottom: `4px solid #60a5fa`,
-                      borderLeft: `4px solid #60a5fa`,
-                      borderBottomLeftRadius: '24px'
-                    }} />
-                    <div style={{
-                      position: 'absolute',
-                      bottom: -2,
-                      right: -2,
-                      width: '40px',
-                      height: '40px',
-                      borderBottom: `4px solid #60a5fa`,
-                      borderRight: `4px solid #60a5fa`,
-                      borderBottomRightRadius: '24px'
-                    }} />
-
-                    {/* Scanning Laser Line */}
-                    <div style={{
-                      position: 'absolute',
-                      width: '100%',
-                      height: '3px',
-                      background: `linear-gradient(90deg, transparent 0%, ${accent} 50%, transparent 100%)`,
-                      boxShadow: `0 0 20px ${accent}, 0 0 40px ${accent}`,
-                      animation: 'scan 2s infinite ease-in-out'
+                    <video ref={videoRef} style={{ width: '100%', display: 'block', opacity: 0.95 }} />
+                    
+                    {/* Dark overlay with cutout */}
+                    <div style={{ 
+                        position: 'absolute', 
+                        top: '50%', 
+                        left: '50%', 
+                        transform: 'translate(-50%, -50%)', 
+                        width: '260px', 
+                        height: '260px', 
+                        boxShadow: '0 0 0 9999px rgba(0,0,0,0.75)',
+                        borderRadius: '24px',
+                        pointerEvents: 'none'
                     }}></div>
-                  </div>
 
-                  {/* Header with Phanix branding */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '20px',
-                    width: '100%',
-                    textAlign: 'center',
-                    pointerEvents: 'none'
-                  }}>
-                    <div style={{
-                      display: 'inline-block',
-                      padding: '8px 20px',
-                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)',
-                      borderRadius: '20px',
-                      boxShadow: '0 4px 15px rgba(59, 130, 246, 0.5)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)'
+                    {/* Scanner Frame with Phanix styling */}
+                    <div style={{ 
+                        position: 'absolute', 
+                        top: '50%', 
+                        left: '50%', 
+                        transform: 'translate(-50%, -50%)', 
+                        width: '260px', 
+                        height: '260px', 
+                        border: `3px solid ${accent}`,
+                        borderRadius: '24px',
+                        boxShadow: `0 0 30px ${accent}, inset 0 0 20px rgba(59, 130, 246, 0.2)`,
+                        pointerEvents: 'none',
+                        overflow: 'hidden',
+                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%)'
                     }}>
-                      <div style={{
-                        color: 'white',
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        letterSpacing: '1.5px',
-                        textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                      }}>
-                        <span style={{ fontWeight: 700 }}>PHANIX</span> SCAN ACTIVE
-                      </div>
+                        {/* Corner accents */}
+                        <div style={{
+                          position: 'absolute',
+                          top: -2,
+                          left: -2,
+                          width: '40px',
+                          height: '40px',
+                          borderTop: `4px solid #60a5fa`,
+                          borderLeft: `4px solid #60a5fa`,
+                          borderTopLeftRadius: '24px'
+                        }} />
+                        <div style={{
+                          position: 'absolute',
+                          top: -2,
+                          right: -2,
+                          width: '40px',
+                          height: '40px',
+                          borderTop: `4px solid #60a5fa`,
+                          borderRight: `4px solid #60a5fa`,
+                          borderTopRightRadius: '24px'
+                        }} />
+                        <div style={{
+                          position: 'absolute',
+                          bottom: -2,
+                          left: -2,
+                          width: '40px',
+                          height: '40px',
+                          borderBottom: `4px solid #60a5fa`,
+                          borderLeft: `4px solid #60a5fa`,
+                          borderBottomLeftRadius: '24px'
+                        }} />
+                        <div style={{
+                          position: 'absolute',
+                          bottom: -2,
+                          right: -2,
+                          width: '40px',
+                          height: '40px',
+                          borderBottom: `4px solid #60a5fa`,
+                          borderRight: `4px solid #60a5fa`,
+                          borderBottomRightRadius: '24px'
+                        }} />
+                        
+                        {/* Scanning Laser Line */}
+                        <div style={{
+                            position: 'absolute',
+                            width: '100%',
+                            height: '3px',
+                            background: `linear-gradient(90deg, transparent 0%, ${accent} 50%, transparent 100%)`,
+                            boxShadow: `0 0 20px ${accent}, 0 0 40px ${accent}`,
+                            animation: 'scan 2s infinite ease-in-out'
+                        }}></div>
                     </div>
-                  </div>
 
-                  {/* Camera flip button */}
-                  {videoDevices.length > 1 && (
-                    <button
-                      onClick={() => setSelectedDeviceIndex(prev => (prev + 1) % videoDevices.length)}
-                      style={{
-                        position: 'absolute',
-                        top: 20,
-                        right: 20,
-                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)',
-                        border: '1px solid rgba(255,255,255,0.3)',
-                        borderRadius: '50%',
-                        width: 48,
-                        height: 48,
-                        color: 'white',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 22,
-                        zIndex: 10,
-                        transition: 'all 0.3s',
-                        boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.1)';
-                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.3)';
-                      }}
-                      title="Switch Camera"
-                    >
-                      ↻
-                    </button>
-                  )}
-
-                  {/* Camera Status Label */}
-                  {videoDevices.length > 0 && (
+                    {/* Header with Phanix branding */}
                     <div style={{
-                      position: 'absolute',
-                      top: '75px',
-                      width: '100%',
-                      textAlign: 'center',
-                      pointerEvents: 'none',
-                      zIndex: 5
+                        position: 'absolute',
+                        top: '20px',
+                        width: '100%',
+                        textAlign: 'center',
+                        pointerEvents: 'none'
                     }}>
                       <div style={{
                         display: 'inline-block',
-                        padding: '4px 12px',
-                        background: 'rgba(0,0,0,0.6)',
-                        backdropFilter: 'blur(4px)',
-                        borderRadius: '12px',
-                        color: 'rgba(255,255,255,0.8)',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        letterSpacing: '0.5px',
-                        textTransform: 'uppercase'
+                        padding: '8px 20px',
+                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)',
+                        borderRadius: '20px',
+                        boxShadow: '0 4px 15px rgba(59, 130, 246, 0.5)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)'
                       }}>
-                        SOURCE: {videoDevices[selectedDeviceIndex]?.label || `CAMERA ${selectedDeviceIndex + 1}`}
+                        <div style={{
+                          color: 'white',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          letterSpacing: '1.5px',
+                          textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span style={{ fontWeight: 700 }}>PHANIX</span> SCAN ACTIVE
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* Stop button */}
-                  <button
-                    onClick={() => setIsCameraActive(false)}
-                    style={{
-                      position: 'absolute',
-                      bottom: 30,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      padding: '12px 30px',
-                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                      color: 'white',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: 30,
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      fontWeight: 700,
-                      boxShadow: '0 6px 20px rgba(239, 68, 68, 0.3)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      transition: 'all 0.3s',
-                      letterSpacing: '0.5px'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateX(-50%) scale(1.05)';
-                      e.currentTarget.style.boxShadow = '0 8px 25px rgba(239, 68, 68, 0.4)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateX(-50%) scale(1)';
-                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.3)';
-                    }}
-                  >
-                    <span style={{ fontSize: '16px' }}>⏹</span>
-                    STOP CAMERA
-                  </button>
+                    {/* Camera flip button */}
+                    {videoDevices.length > 1 && (
+                      <button
+                          onClick={() => setSelectedDeviceIndex(prev => (prev + 1) % videoDevices.length)}
+                          style={{
+                              position: 'absolute',
+                              top: 20,
+                              right: 20,
+                              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)',
+                              border: '1px solid rgba(255,255,255,0.3)',
+                              borderRadius: '50%',
+                              width: 48,
+                              height: 48,
+                              color: 'white',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 22,
+                              zIndex: 10,
+                              transition: 'all 0.3s',
+                              boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.3)';
+                          }}
+                          title="Switch Camera"
+                      >
+                          ↻
+                      </button>
+                    )}
+
+                    {/* Camera Status Label */}
+                    {videoDevices.length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '75px',
+                        width: '100%',
+                        textAlign: 'center',
+                        pointerEvents: 'none',
+                        zIndex: 5
+                      }}>
+                        <div style={{
+                          display: 'inline-block',
+                          padding: '4px 12px',
+                          background: 'rgba(0,0,0,0.6)',
+                          backdropFilter: 'blur(4px)',
+                          borderRadius: '12px',
+                          color: 'rgba(255,255,255,0.8)',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          letterSpacing: '0.5px',
+                          textTransform: 'uppercase'
+                        }}>
+                          SOURCE: {videoDevices[selectedDeviceIndex]?.label || `CAMERA ${selectedDeviceIndex + 1}`}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stop button */}
+                    <button 
+                        onClick={() => setIsCameraActive(false)}
+                        style={{ 
+                            position: 'absolute', 
+                            bottom: 30, 
+                            left: '50%', 
+                            transform: 'translateX(-50%)', 
+                            padding: '12px 30px', 
+                            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', 
+                            color: 'white', 
+                            border: '1px solid rgba(255,255,255,0.2)', 
+                            borderRadius: 30, 
+                            cursor: 'pointer', 
+                            fontSize: 14, 
+                            fontWeight: 700,
+                            boxShadow: '0 6px 20px rgba(239, 68, 68, 0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            transition: 'all 0.3s',
+                            letterSpacing: '0.5px'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateX(-50%) scale(1.05)';
+                          e.currentTarget.style.boxShadow = '0 8px 25px rgba(239, 68, 68, 0.4)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateX(-50%) scale(1)';
+                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.3)';
+                        }}
+                    >
+                        <span style={{ fontSize: '16px' }}>⏹</span>
+                        STOP CAMERA
+                    </button>
                 </div>
               )}
 
               {/* Scan Method Buttons */}
-              <div style={{
-                display: 'flex',
-                gap: 15,
+              <div style={{ 
+                display: 'flex', 
+                gap: 15, 
                 marginBottom: 25,
                 position: 'relative',
                 zIndex: 1
               }}>
-                <button
-                  onClick={() => setIsCameraActive(true)}
-                  style={{
-                    flex: 1,
-                    padding: "16px 20px",
-                    background: "linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)",
-                    border: `2px solid ${accent}`,
-                    borderRadius: 12,
-                    color: "#f4f4f5",
-                    cursor: "pointer",
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    transition: 'all 0.3s',
-                    boxShadow: `0 4px 15px rgba(59, 130, 246, 0.15)`,
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = `linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(37, 99, 235, 0.25) 100%)`;
-                    e.currentTarget.style.boxShadow = `0 6px 20px rgba(59, 130, 246, 0.25)`;
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = `linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)`;
-                    e.currentTarget.style.boxShadow = `0 4px 15px rgba(59, 130, 246, 0.15)`;
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <div style={{ fontSize: '20px', fontWeight: 700, color: accent }}>CAM</div>
-                  <span style={{ letterSpacing: '0.5px' }}>CAMERA SCAN</span>
-                  <span style={{ fontSize: '11px', color: '#93c5fd', fontWeight: 400 }}>Live Detection</span>
-                </button>
-
-                <button
-                  onClick={() => fileInputRef.current.click()}
-                  style={{
-                    flex: 1,
-                    padding: "16px 20px",
-                    background: "linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%)",
-                    border: "2px solid #10b981",
-                    borderRadius: 12,
-                    color: "#f4f4f5",
-                    cursor: "pointer",
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    transition: 'all 0.3s',
-                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.15)',
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(5, 150, 105, 0.25) 100%)';
-                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.25)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%)';
-                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.15)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <div style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>IMG</div>
-                  <span style={{ letterSpacing: '0.5px' }}>UPLOAD IMAGE</span>
-                  <span style={{ fontSize: '11px', color: '#6ee7b7', fontWeight: 400 }}>File Analysis</span>
-                </button>
-
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                />
+                  <button
+                    onClick={() => setIsCameraActive(true)}
+                    style={{
+                        flex: 1,
+                        padding: "16px 20px",
+                        background: "linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)",
+                        border: `2px solid ${accent}`,
+                        borderRadius: 12,
+                        color: "#f4f4f5",
+                        cursor: "pointer",
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        transition: 'all 0.3s',
+                        boxShadow: `0 4px 15px rgba(59, 130, 246, 0.15)`,
+                        position: 'relative',
+                        overflow: 'hidden'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = `linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(37, 99, 235, 0.25) 100%)`;
+                      e.currentTarget.style.boxShadow = `0 6px 20px rgba(59, 130, 246, 0.25)`;
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = `linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)`;
+                      e.currentTarget.style.boxShadow = `0 4px 15px rgba(59, 130, 246, 0.15)`;
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                      <div style={{ fontSize: '20px', fontWeight: 700, color: accent }}>CAM</div>
+                      <span style={{ letterSpacing: '0.5px' }}>CAMERA SCAN</span>
+                      <span style={{ fontSize: '11px', color: '#93c5fd', fontWeight: 400 }}>Live Detection</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => fileInputRef.current.click()}
+                    style={{
+                        flex: 1,
+                        padding: "16px 20px",
+                        background: "linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%)",
+                        border: "2px solid #10b981",
+                        borderRadius: 12,
+                        color: "#f4f4f5",
+                        cursor: "pointer",
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        transition: 'all 0.3s',
+                        boxShadow: '0 4px 15px rgba(16, 185, 129, 0.15)',
+                        position: 'relative',
+                        overflow: 'hidden'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(5, 150, 105, 0.25) 100%)';
+                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.25)';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%)';
+                      e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.15)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                      <div style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>IMG</div>
+                      <span style={{ letterSpacing: '0.5px' }}>UPLOAD IMAGE</span>
+                      <span style={{ fontSize: '11px', color: '#6ee7b7', fontWeight: 400 }}>File Analysis</span>
+                  </button>
+                  
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileUpload} 
+                    accept="image/*" 
+                    style={{ display: 'none' }} 
+                  />
               </div>
 
               {/* FORENSIC LOADING OVERLAY */}
@@ -3314,12 +3386,12 @@ END OF RECORD`.trim();
                   <div style={{ height: 1, background: "#3f3f46", marginBottom: 20 }}></div>
                   <div>
                     <h3 style={{ margin: "0 0 10px", fontSize: 16, color: '#f4f4f5' }}>Scanned QR Content</h3>
-                    <div style={{
-                      background: '#18181b',
-                      padding: 15,
-                      borderRadius: 8,
-                      fontFamily: 'monospace',
-                      fontSize: 12,
+                    <div style={{ 
+                      background: '#18181b', 
+                      padding: 15, 
+                      borderRadius: 8, 
+                      fontFamily: 'monospace', 
+                      fontSize: 12, 
                       wordBreak: 'break-all',
                       maxHeight: '400px',
                       overflowY: 'auto',
@@ -3331,479 +3403,479 @@ END OF RECORD`.trim();
                 </div>
               )}
 
-              {/* P.H.A.N.I.X FORENSIC ANALYSIS REPORT */}
+               {/* P.H.A.N.I.X FORENSIC ANALYSIS REPORT */}
               {analysisReport && !validationError && scanResult?.type !== 'valid' && (
                 <div style={{ marginTop: 40, animation: "fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }}>
-                  <div style={{
-                    padding: '20px 28px',
-                    background: analysisReport.trustStatus === 'TRUSTED SEAL'
-                      ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 78, 59, 0.15) 100%)'
-                      : 'linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, transparent 100%)',
-                    borderLeft: `4px solid ${analysisReport.trustStatus === 'TRUSTED SEAL' ? '#10b981' : accent}`,
-                    borderRadius: '0 16px 16px 0',
-                    marginBottom: 30,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL'
-                      ? '0 8px 25px rgba(16, 185, 129, 0.25)'
-                      : '0 4px 12px rgba(0,0,0,0.1)',
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}>
-                    {/* Animated background effect for TRUSTED SEAL */}
-                    {analysisReport.trustStatus === 'TRUSTED SEAL' && (
-                      <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.1), transparent)',
-                        animation: 'shimmer 3s infinite',
-                        pointerEvents: 'none'
-                      }} />
-                    )}
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 1 }}>
-                      <div style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: '50%',
-                        background: analysisReport.trustStatus === 'TRUSTED SEAL'
-                          ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-                          : accent,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL'
-                          ? '0 0 20px rgba(16, 185, 129, 0.5)'
-                          : `0 0 15px ${accent}44`,
-                        animation: analysisReport.trustStatus === 'TRUSTED SEAL' ? 'pulse 2s infinite' : 'none'
-                      }}>
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                          {analysisReport.trustStatus === 'TRUSTED SEAL' && (
-                            <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2.5" />
-                          )}
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 style={{ margin: '0 0 4px 0', fontSize: 18, fontWeight: 800, color: '#f4f4f5', letterSpacing: '0.8px' }}>
-                          FORENSIC ANALYSIS REPORT
-                        </h3>
-                        <div style={{ fontSize: 11, color: '#a1a1aa', fontWeight: 500 }}>
-                          {analysisReport.trustStatus === 'TRUSTED SEAL' ? 'P.H.A.N.I.X Verified Evidence' : 'External Data Analysis'}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{
-                      background: analysisReport.classification.includes("PHANIX") ? 'rgba(16, 185, 129, 0.25)' : 'rgba(59, 130, 246, 0.2)',
-                      padding: '6px 16px',
-                      borderRadius: '25px',
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      color: analysisReport.classification.includes("PHANIX") ? '#34d399' : accent,
-                      border: `2px solid ${analysisReport.classification.includes("PHANIX") ? '#10b98166' : accent + '66'}`,
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      position: 'relative',
-                      zIndex: 1
-                    }}>
-                      {analysisReport.classification.includes("PHANIX") ? '✓ Verified Internal' : 'External Scan'}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginBottom: 25 }}>
-                    {/* Integrity Authentication Card */}
-                    <div style={{
-                      background: analysisReport.trustStatus === 'TRUSTED SEAL'
-                        ? 'linear-gradient(135deg, #064e3b 0%, #022c22 100%)'
-                        : '#1c1c1f',
-                      padding: 28,
-                      borderRadius: 20,
-                      border: analysisReport.trustStatus === 'TRUSTED SEAL'
-                        ? '2px solid rgba(16, 185, 129, 0.4)'
-                        : `1px solid ${analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#ef444444' : '#3f3f46'}`,
-                      position: 'relative',
-                      overflow: 'hidden',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                      boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL'
-                        ? '0 10px 40px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
-                        : 'none'
-                    }}>
-                      {/* Premium background effect for TRUSTED SEAL */}
+                   <div style={{ 
+                     padding: '20px 28px', 
+                     background: analysisReport.trustStatus === 'TRUSTED SEAL' 
+                       ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 78, 59, 0.15) 100%)'
+                       : 'linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, transparent 100%)', 
+                     borderLeft: `4px solid ${analysisReport.trustStatus === 'TRUSTED SEAL' ? '#10b981' : accent}`,
+                     borderRadius: '0 16px 16px 0',
+                     marginBottom: 30,
+                     display: 'flex',
+                     justifyContent: 'space-between',
+                     alignItems: 'center',
+                     boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL' 
+                       ? '0 8px 25px rgba(16, 185, 129, 0.25)'
+                       : '0 4px 12px rgba(0,0,0,0.1)',
+                     position: 'relative',
+                     overflow: 'hidden'
+                   }}>
+                      {/* Animated background effect for TRUSTED SEAL */}
                       {analysisReport.trustStatus === 'TRUSTED SEAL' && (
-                        <>
-                          <div style={{
-                            position: 'absolute',
-                            top: '-50%',
-                            right: '-50%',
-                            width: '200%',
-                            height: '200%',
-                            background: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)',
-                            animation: 'rotate 20s linear infinite',
-                            pointerEvents: 'none'
-                          }} />
-                          <div style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: 'linear-gradient(45deg, transparent 30%, rgba(16, 185, 129, 0.05) 50%, transparent 70%)',
-                            backgroundSize: '200% 200%',
-                            animation: 'shimmer 4s ease-in-out infinite',
-                            pointerEvents: 'none'
-                          }} />
-                        </>
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: 'linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.1), transparent)',
+                          animation: 'shimmer 3s infinite',
+                          pointerEvents: 'none'
+                        }} />
                       )}
-
-                      <div style={{ fontSize: 11, color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#6ee7b7' : '#a1a1aa', marginBottom: 16, fontWeight: 700, letterSpacing: '1.8px', opacity: 0.9, position: 'relative', zIndex: 1 }}>
-                        INTEGRITY AUTHENTICATION
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: 14, position: 'relative', zIndex: 1 }}>
-                        {analysisReport.trustStatus === 'TRUSTED SEAL' ? (
-                          <div style={{
-                            width: 52,
-                            height: 52,
-                            borderRadius: '12px',
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 8px 25px rgba(16, 185, 129, 0.4), 0 0 0 4px rgba(16, 185, 129, 0.2)',
-                            animation: 'pulse 2s infinite'
-                          }}>
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                              <path d="M9 12l2 2 4-4" strokeWidth="3" />
-                            </svg>
-                          </div>
-                        ) : (
-                          <div style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: '50%',
-                            background: analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#ef4444' : (analysisReport.riskLevel === 'MEDIUM' ? '#f59e0b' : '#3b82f6'),
-                            boxShadow: `0 0 15px ${analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#ef4444' : (analysisReport.riskLevel === 'MEDIUM' ? '#f59e0b' : '#3b82f6')}66`,
-                            animation: 'pulse 2.5s infinite'
-                          }} />
-                        )}
-                        <div>
-                          <div style={{
-                            fontWeight: 900,
-                            color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#6ee7b7' : (analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#f87171' : (analysisReport.riskLevel === 'MEDIUM' ? '#fbbf24' : '#f4f4f5')),
-                            fontSize: analysisReport.trustStatus === 'TRUSTED SEAL' ? 26 : 22,
-                            letterSpacing: '1px',
-                            textTransform: 'uppercase',
-                            textShadow: analysisReport.trustStatus === 'TRUSTED SEAL' ? '0 2px 10px rgba(16, 185, 129, 0.5)' : 'none',
-                            marginBottom: 4
-                          }}>
-                            {analysisReport.trustStatus}
-                          </div>
-                          {analysisReport.trustStatus === 'TRUSTED SEAL' && (
-                            <div style={{
-                              fontSize: 11,
-                              color: '#34d399',
-                              fontWeight: 600,
-                              letterSpacing: '0.5px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}>
-                              <span style={{ fontSize: '14px' }}>✨</span>
-                              P.H.A.N.I.X Certified
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <p style={{ margin: "0 0 24px 0", fontSize: 14, color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#d1fae5' : '#a1a1aa', lineHeight: 1.6, maxWidth: '95%', position: 'relative', zIndex: 1 }}>
-                        {analysisReport.trustDescription}
-                      </p>
-
-                      {/* VERIFICATION CHECKLIST */}
-                      <div style={{
-                        background: analysisReport.trustStatus === 'TRUSTED SEAL'
-                          ? 'rgba(16, 185, 129, 0.1)'
-                          : 'rgba(0,0,0,0.2)',
-                        borderRadius: '14px',
-                        padding: '16px 18px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '10px',
-                        border: analysisReport.trustStatus === 'TRUSTED SEAL'
-                          ? '1px solid rgba(16, 185, 129, 0.2)'
-                          : 'none',
-                        position: 'relative',
-                        zIndex: 1
-                      }}>
-                        <div style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#34d399' : '#71717a',
-                          letterSpacing: '1px',
-                          marginBottom: 4,
-                          textTransform: 'uppercase'
-                        }}>
-                          Verification Checklist
-                        </div>
-                        {analysisReport.checklist.map((item, i) => (
-                          <div key={i} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            fontSize: '12px',
-                            padding: '6px 0'
-                          }}>
-                            <span style={{
-                              color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#d1fae5' : '#a1a1aa',
-                              fontWeight: 600,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px'
-                            }}>
-                              {item.status === 'PASS' && analysisReport.trustStatus === 'TRUSTED SEAL' && (
-                                <span style={{ fontSize: '14px' }}>✓</span>
-                              )}
-                              {item.label}
-                            </span>
-                            <span style={{
-                              color: item.status === 'PASS' ? '#34d399' : (item.status === 'FAIL' ? '#ef4444' : '#52525b'),
-                              fontWeight: 800,
-                              fontSize: '11px',
-                              letterSpacing: '0.8px',
-                              padding: '3px 10px',
-                              borderRadius: '12px',
-                              background: item.status === 'PASS' && analysisReport.trustStatus === 'TRUSTED SEAL'
-                                ? 'rgba(16, 185, 129, 0.15)'
-                                : (item.status === 'PASS' ? 'rgba(16, 185, 129, 0.08)' : 'transparent')
-                            }}>
-                              {item.status === 'PASS' ? '✓ ' : (item.status === 'FAIL' ? '❌ ' : '○ ')}{item.status}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Background watermark */}
-                      <div style={{
-                        position: 'absolute',
-                        right: analysisReport.trustStatus === 'TRUSTED SEAL' ? -10 : -5,
-                        bottom: analysisReport.trustStatus === 'TRUSTED SEAL' ? -20 : -15,
-                        fontSize: analysisReport.trustStatus === 'TRUSTED SEAL' ? '110px' : '90px',
-                        opacity: analysisReport.trustStatus === 'TRUSTED SEAL' ? 0.06 : 0.03,
-                        transform: 'rotate(-10deg)',
-                        pointerEvents: 'none',
-                        color: '#fff',
-                        filter: analysisReport.trustStatus === 'TRUSTED SEAL' ? 'drop-shadow(0 0 20px rgba(16, 185, 129, 0.3))' : 'none'
-                      }}>
-                        {analysisReport.trustStatus === 'TRUSTED SEAL' ? '🛡️' : (analysisReport.trustStatus === 'TAMPERED PACKAGE' ? '☣️' : '🔍')}
-                      </div>
-                    </div>
-
-                    {/* Classification Detail Card */}
-                    <div style={{
-                      background: '#1c1c1f',
-                      padding: 24,
-                      borderRadius: 16,
-                      border: '1px solid #3f3f46',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center'
-                    }}>
-                      <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 12, fontWeight: 700, letterSpacing: '1.5px', opacity: 0.8 }}>DATA CLASSIFICATION</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <div style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: '12px',
-                          background: 'rgba(59, 130, 246, 0.1)',
-                          display: 'flex',
-                          alignItems: 'center',
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 1 }}>
+                        <div style={{ 
+                          width: 42, 
+                          height: 42, 
+                          borderRadius: '50%', 
+                          background: analysisReport.trustStatus === 'TRUSTED SEAL' 
+                            ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                            : accent, 
+                          display: 'flex', 
+                          alignItems: 'center', 
                           justifyContent: 'center',
-                          color: accent,
-                          border: `1px solid ${accent}33`
+                          color: 'white',
+                          boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL'
+                            ? '0 0 20px rgba(16, 185, 129, 0.5)'
+                            : `0 0 15px ${accent}44`,
+                          animation: analysisReport.trustStatus === 'TRUSTED SEAL' ? 'pulse 2s infinite' : 'none'
                         }}>
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                            <line x1="12" y1="22.08" x2="12" y2="12" />
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            {analysisReport.trustStatus === 'TRUSTED SEAL' && (
+                              <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2.5"/>
+                            )}
                           </svg>
                         </div>
                         <div>
-                          <div style={{ fontWeight: 700, color: '#f4f4f5', fontSize: 18, marginBottom: 2 }}>
-                            {analysisReport.classification}
+                          <h3 style={{ margin: '0 0 4px 0', fontSize: 18, fontWeight: 800, color: '#f4f4f5', letterSpacing: '0.8px' }}>
+                            FORENSIC ANALYSIS REPORT
+                          </h3>
+                          <div style={{ fontSize: 11, color: '#a1a1aa', fontWeight: 500 }}>
+                            {analysisReport.trustStatus === 'TRUSTED SEAL' ? 'P.H.A.N.I.X Verified Evidence' : 'External Data Analysis'}
                           </div>
-                          <div style={{ fontSize: 12, color: '#71717a' }}>Structure Analysis: Complete</div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  {analysisReport.indicators.length > 0 && (
-                    <div style={{
-                      marginBottom: 25,
-                      background: 'rgba(24, 24, 27, 0.4)',
-                      padding: '20px',
-                      borderRadius: '16px',
-                      border: '1px solid #27272a'
-                    }}>
-                      <div style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: analysisReport.riskLevel === 'LOW' ? '#34d399' : '#f87171',
-                        marginBottom: 15,
+                      <div style={{ 
+                        background: analysisReport.classification.includes("PHANIX") ? 'rgba(16, 185, 129, 0.25)' : 'rgba(59, 130, 246, 0.2)',
+                        padding: '6px 16px',
+                        borderRadius: '25px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        color: analysisReport.classification.includes("PHANIX") ? '#34d399' : accent,
+                        border: `2px solid ${analysisReport.classification.includes("PHANIX") ? '#10b98166' : accent + '66'}`,
+                        textTransform: 'uppercase',
                         letterSpacing: '1px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
+                        position: 'relative',
+                        zIndex: 1
                       }}>
-                        <span style={{ fontSize: '18px' }}>{analysisReport.riskLevel === 'LOW' ? '🛡️' : '🚨'}</span>
-                        {analysisReport.riskLevel === 'LOW' ? 'INTEGRITY INDICATORS:' : 'SECURITY ALERTS DETECTED:'}
+                        {analysisReport.classification.includes("PHANIX") ? '✓ Verified Internal' : 'External Scan'}
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
-                        {analysisReport.indicators.map((ind, i) => (
-                          <div key={i} style={{
-                            fontSize: 13,
-                            color: analysisReport.riskLevel === 'LOW' ? '#6ee7b7' : '#fca5a5',
-                            background: analysisReport.riskLevel === 'LOW' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                            padding: '12px 16px',
-                            borderRadius: '10px',
-                            border: `1px solid ${analysisReport.riskLevel === 'LOW' ? '#10b98122' : '#ef444422'}`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px'
-                          }}>
-                            <div style={{ minWidth: '6px', height: '6px', borderRadius: '50%', background: 'currentColor' }} />
-                            {ind}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                   </div>
 
-                  <div style={{
-                    background: 'linear-gradient(135deg, #18181b 0%, #09090b 100%)',
-                    padding: 25,
-                    borderRadius: 16,
-                    border: '1px solid #3f3f46',
-                    boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.2)'
-                  }}>
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <div style={{ fontSize: 11, color: '#a1a1aa', fontWeight: 600, letterSpacing: '1.5px' }}>SHA-256 INTEGRITY HASH</div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(analysisReport.hash)}
-                            style={{
-                              background: 'transparent',
-                              color: accent,
-                              fontSize: 11,
-                              cursor: 'pointer',
-                              fontWeight: 600,
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              transition: 'all 0.2s',
-                              border: `1px solid ${accent}44`
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
-                              e.currentTarget.style.borderColor = accent;
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = 'transparent';
-                              e.currentTarget.style.borderColor = `${accent}44`;
-                            }}
-                          >
-                            COPY HASH
-                          </button>
-                          <button
-                            onClick={downloadForensicReport}
-                            style={{
-                              background: accent,
-                              border: 'none',
-                              color: 'white',
-                              fontSize: 11,
-                              cursor: 'pointer',
-                              fontWeight: 700,
-                              padding: '4px 12px',
-                              borderRadius: '4px',
-                              transition: 'all 0.2s',
+                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginBottom: 25 }}>
+                      {/* Integrity Authentication Card */}
+                      <div style={{ 
+                        background: analysisReport.trustStatus === 'TRUSTED SEAL' 
+                          ? 'linear-gradient(135deg, #064e3b 0%, #022c22 100%)'
+                          : '#1c1c1f', 
+                        padding: 28, 
+                        borderRadius: 20, 
+                        border: analysisReport.trustStatus === 'TRUSTED SEAL'
+                          ? '2px solid rgba(16, 185, 129, 0.4)'
+                          : `1px solid ${analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#ef444444' : '#3f3f46'}`,
+                        position: 'relative',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL'
+                          ? '0 10px 40px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
+                          : 'none'
+                      }}>
+                        {/* Premium background effect for TRUSTED SEAL */}
+                        {analysisReport.trustStatus === 'TRUSTED SEAL' && (
+                          <>
+                            <div style={{
+                              position: 'absolute',
+                              top: '-50%',
+                              right: '-50%',
+                              width: '200%',
+                              height: '200%',
+                              background: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)',
+                              animation: 'rotate 20s linear infinite',
+                              pointerEvents: 'none'
+                            }} />
+                            <div style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              background: 'linear-gradient(45deg, transparent 30%, rgba(16, 185, 129, 0.05) 50%, transparent 70%)',
+                              backgroundSize: '200% 200%',
+                              animation: 'shimmer 4s ease-in-out infinite',
+                              pointerEvents: 'none'
+                            }} />
+                          </>
+                        )}
+                        
+                        <div style={{ fontSize: 11, color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#6ee7b7' : '#a1a1aa', marginBottom: 16, fontWeight: 700, letterSpacing: '1.8px', opacity: 0.9, position: 'relative', zIndex: 1 }}>
+                          INTEGRITY AUTHENTICATION
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: 14, position: 'relative', zIndex: 1 }}>
+                          {analysisReport.trustStatus === 'TRUSTED SEAL' ? (
+                            <div style={{
+                              width: 52,
+                              height: 52,
+                              borderRadius: '12px',
+                              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '6px',
-                              boxShadow: `0 2px 8px ${accent}44`
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.transform = 'translateY(-1px)';
-                              e.currentTarget.style.boxShadow = `0 4px 12px ${accent}66`;
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.transform = 'translateY(0)';
-                              e.currentTarget.style.boxShadow = `0 2px 8px ${accent}44`;
-                            }}
-                          >
-                            <span>⬇️</span> DOWNLOAD REPORT
-                          </button>
+                              justifyContent: 'center',
+                              boxShadow: '0 8px 25px rgba(16, 185, 129, 0.4), 0 0 0 4px rgba(16, 185, 129, 0.2)',
+                              animation: 'pulse 2s infinite'
+                            }}>
+                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                <path d="M9 12l2 2 4-4" strokeWidth="3"/>
+                              </svg>
+                            </div>
+                          ) : (
+                            <div style={{ 
+                              width: 18, 
+                              height: 18, 
+                              borderRadius: '50%', 
+                              background: analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#ef4444' : (analysisReport.riskLevel === 'MEDIUM' ? '#f59e0b' : '#3b82f6'),
+                              boxShadow: `0 0 15px ${analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#ef4444' : (analysisReport.riskLevel === 'MEDIUM' ? '#f59e0b' : '#3b82f6')}66`,
+                              animation: 'pulse 2.5s infinite'
+                            }} />
+                          )}
+                          <div>
+                            <div style={{ 
+                              fontWeight: 900, 
+                              color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#6ee7b7' : (analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#f87171' : (analysisReport.riskLevel === 'MEDIUM' ? '#fbbf24' : '#f4f4f5')),
+                              fontSize: analysisReport.trustStatus === 'TRUSTED SEAL' ? 26 : 22,
+                              letterSpacing: '1px',
+                              textTransform: 'uppercase',
+                              textShadow: analysisReport.trustStatus === 'TRUSTED SEAL' ? '0 2px 10px rgba(16, 185, 129, 0.5)' : 'none',
+                              marginBottom: 4
+                            }}>
+                              {analysisReport.trustStatus}
+                            </div>
+                            {analysisReport.trustStatus === 'TRUSTED SEAL' && (
+                              <div style={{ 
+                                fontSize: 11, 
+                                color: '#34d399', 
+                                fontWeight: 600,
+                                letterSpacing: '0.5px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}>
+                                <span style={{ fontSize: '14px' }}>✨</span>
+                                P.H.A.N.I.X Certified
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <p style={{ margin: "0 0 24px 0", fontSize: 14, color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#d1fae5' : '#a1a1aa', lineHeight: 1.6, maxWidth: '95%', position: 'relative', zIndex: 1 }}>
+                          {analysisReport.trustDescription}
+                        </p>
+
+                        {/* VERIFICATION CHECKLIST */}
+                        <div style={{ 
+                          background: analysisReport.trustStatus === 'TRUSTED SEAL'
+                            ? 'rgba(16, 185, 129, 0.1)'
+                            : 'rgba(0,0,0,0.2)', 
+                          borderRadius: '14px', 
+                          padding: '16px 18px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '10px',
+                          border: analysisReport.trustStatus === 'TRUSTED SEAL'
+                            ? '1px solid rgba(16, 185, 129, 0.2)'
+                            : 'none',
+                          position: 'relative',
+                          zIndex: 1
+                        }}>
+                          <div style={{ 
+                            fontSize: 10, 
+                            fontWeight: 700, 
+                            color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#34d399' : '#71717a',
+                            letterSpacing: '1px',
+                            marginBottom: 4,
+                            textTransform: 'uppercase'
+                          }}>
+                            Verification Checklist
+                          </div>
+                          {analysisReport.checklist.map((item, i) => (
+                            <div key={i} style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'space-between', 
+                              fontSize: '12px',
+                              padding: '6px 0'
+                            }}>
+                              <span style={{ 
+                                color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#d1fae5' : '#a1a1aa', 
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}>
+                                {item.status === 'PASS' && analysisReport.trustStatus === 'TRUSTED SEAL' && (
+                                  <span style={{ fontSize: '14px' }}>✓</span>
+                                )}
+                                {item.label}
+                              </span>
+                              <span style={{ 
+                                color: item.status === 'PASS' ? '#34d399' : (item.status === 'FAIL' ? '#ef4444' : '#52525b'),
+                                fontWeight: 800,
+                                fontSize: '11px',
+                                letterSpacing: '0.8px',
+                                padding: '3px 10px',
+                                borderRadius: '12px',
+                                background: item.status === 'PASS' && analysisReport.trustStatus === 'TRUSTED SEAL'
+                                  ? 'rgba(16, 185, 129, 0.15)'
+                                  : (item.status === 'PASS' ? 'rgba(16, 185, 129, 0.08)' : 'transparent')
+                              }}>
+                                {item.status === 'PASS' ? '✓ ' : (item.status === 'FAIL' ? '❌ ' : '○ ')}{item.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Background watermark */}
+                        <div style={{ 
+                          position: 'absolute', 
+                          right: analysisReport.trustStatus === 'TRUSTED SEAL' ? -10 : -5, 
+                          bottom: analysisReport.trustStatus === 'TRUSTED SEAL' ? -20 : -15, 
+                          fontSize: analysisReport.trustStatus === 'TRUSTED SEAL' ? '110px' : '90px', 
+                          opacity: analysisReport.trustStatus === 'TRUSTED SEAL' ? 0.06 : 0.03,
+                          transform: 'rotate(-10deg)',
+                          pointerEvents: 'none',
+                          color: '#fff',
+                          filter: analysisReport.trustStatus === 'TRUSTED SEAL' ? 'drop-shadow(0 0 20px rgba(16, 185, 129, 0.3))' : 'none'
+                        }}>
+                          {analysisReport.trustStatus === 'TRUSTED SEAL' ? '🛡️' : (analysisReport.trustStatus === 'TAMPERED PACKAGE' ? '☣️' : '🔍')}
                         </div>
                       </div>
-                      <div style={{
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: '#f4f4f5',
-                        background: 'rgba(0,0,0,0.3)',
-                        padding: '16px',
-                        borderRadius: '12px',
-                        wordBreak: 'break-all',
-                        lineHeight: 1.6,
-                        border: `1px solid ${accent}33`,
-                        boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)'
-                      }}>
-                        <span style={{ color: accent, marginRight: 8, opacity: 0.7 }}>$</span>
-                        {analysisReport.hash}
-                      </div>
-                    </div>
 
-                    <div style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '20px',
-                      fontSize: 11,
-                      color: '#71717a',
-                      fontWeight: 500,
-                      alignItems: 'center'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ color: accent }}>●</span> SOURCE: <span style={{ color: '#a1a1aa' }}>{analysisReport.source.replace(/_/g, ' ')}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ color: accent }}>●</span> TIMESTAMP: <span style={{ color: '#a1a1aa' }}>{new Date(analysisReport.timestamp).toLocaleString()}</span>
-                      </div>
-
-                      <div style={{
-                        marginLeft: 'auto',
-                        padding: '6px 12px',
-                        background: 'rgba(59, 130, 246, 0.05)',
-                        borderRadius: '8px',
-                        border: `1px solid ${accent}22`,
-                        fontSize: '10px',
-                        color: '#93c5fd',
+                      {/* Classification Detail Card */}
+                      <div style={{ 
+                        background: '#1c1c1f', 
+                        padding: 24, 
+                        borderRadius: 16, 
+                        border: '1px solid #3f3f46',
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
+                        flexDirection: 'column',
+                        justifyContent: 'center'
                       }}>
-                        <span style={{ fontSize: '14px' }}>🛡️</span>
-                        <span><strong>ADVISORY:</strong> Keep this downloaded copy for further authentication.</span>
+                        <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 12, fontWeight: 700, letterSpacing: '1.5px', opacity: 0.8 }}>DATA CLASSIFICATION</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                          <div style={{ 
+                            width: 48, 
+                            height: 48, 
+                            borderRadius: '12px', 
+                            background: 'rgba(59, 130, 246, 0.1)', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            color: accent,
+                            border: `1px solid ${accent}33`
+                          }}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                              <line x1="12" y1="22.08" x2="12" y2="12"/>
+                            </svg>
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#f4f4f5', fontSize: 18, marginBottom: 2 }}>
+                              {analysisReport.classification}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#71717a' }}>Structure Analysis: Complete</div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                   </div>
 
-                  <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, #3f3f46, transparent)', margin: '40px 0' }} />
+                   {analysisReport.indicators.length > 0 && (
+                     <div style={{ 
+                       marginBottom: 25, 
+                       background: 'rgba(24, 24, 27, 0.4)', 
+                       padding: '20px', 
+                       borderRadius: '16px',
+                       border: '1px solid #27272a'
+                     }}>
+                       <div style={{ 
+                         fontSize: 12, 
+                         fontWeight: 700, 
+                         color: analysisReport.riskLevel === 'LOW' ? '#34d399' : '#f87171', 
+                         marginBottom: 15, 
+                         letterSpacing: '1px',
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '8px'
+                       }}>
+                         <span style={{ fontSize: '18px' }}>{analysisReport.riskLevel === 'LOW' ? '🛡️' : '🚨'}</span>
+                         {analysisReport.riskLevel === 'LOW' ? 'INTEGRITY INDICATORS:' : 'SECURITY ALERTS DETECTED:'}
+                       </div>
+                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
+                         {analysisReport.indicators.map((ind, i) => (
+                           <div key={i} style={{ 
+                             fontSize: 13, 
+                             color: analysisReport.riskLevel === 'LOW' ? '#6ee7b7' : '#fca5a5', 
+                             background: analysisReport.riskLevel === 'LOW' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)', 
+                             padding: '12px 16px', 
+                             borderRadius: '10px',
+                             border: `1px solid ${analysisReport.riskLevel === 'LOW' ? '#10b98122' : '#ef444422'}`,
+                             display: 'flex',
+                             alignItems: 'center',
+                             gap: '12px'
+                           }}>
+                             <div style={{ minWidth: '6px', height: '6px', borderRadius: '50%', background: 'currentColor' }} />
+                             {ind}
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   )}
+
+                   <div style={{ 
+                     background: 'linear-gradient(135deg, #18181b 0%, #09090b 100%)', 
+                     padding: 25, 
+                     borderRadius: 16, 
+                     border: '1px solid #3f3f46',
+                     boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.2)'
+                   }}>
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <div style={{ fontSize: 11, color: '#a1a1aa', fontWeight: 600, letterSpacing: '1.5px' }}>SHA-256 INTEGRITY HASH</div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button 
+                              onClick={() => navigator.clipboard.writeText(analysisReport.hash)}
+                              style={{ 
+                                background: 'transparent', 
+                                color: accent, 
+                                fontSize: 11, 
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s',
+                                border: `1px solid ${accent}44`
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                                e.currentTarget.style.borderColor = accent;
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.borderColor = `${accent}44`;
+                              }}
+                            >
+                              COPY HASH
+                            </button>
+                            <button 
+                              onClick={downloadForensicReport}
+                              style={{ 
+                                background: accent, 
+                                border: 'none', 
+                                color: 'white', 
+                                fontSize: 11, 
+                                cursor: 'pointer',
+                                fontWeight: 700,
+                                padding: '4px 12px',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: `0 2px 8px ${accent}44`
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                e.currentTarget.style.boxShadow = `0 4px 12px ${accent}66`;
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = `0 2px 8px ${accent}44`;
+                              }}
+                            >
+                              <span>⬇️</span> DOWNLOAD REPORT
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{ 
+                          fontFamily: 'monospace', 
+                          fontSize: 12, 
+                          color: '#f4f4f5', 
+                          background: 'rgba(0,0,0,0.3)', 
+                          padding: '16px', 
+                          borderRadius: '12px', 
+                          wordBreak: 'break-all',
+                          lineHeight: 1.6,
+                          border: `1px solid ${accent}33`,
+                          boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)'
+                        }}>
+                          <span style={{ color: accent, marginRight: 8, opacity: 0.7 }}>$</span>
+                          {analysisReport.hash}
+                        </div>
+                      </div>
+                      
+                      <div style={{ 
+                        display: 'flex', 
+                        flexWrap: 'wrap', 
+                        gap: '20px', 
+                        fontSize: 11, 
+                        color: '#71717a',
+                        fontWeight: 500,
+                        alignItems: 'center'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: accent }}>●</span> SOURCE: <span style={{ color: '#a1a1aa' }}>{analysisReport.source.replace(/_/g, ' ')}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: accent }}>●</span> TIMESTAMP: <span style={{ color: '#a1a1aa' }}>{new Date(analysisReport.timestamp).toLocaleString()}</span>
+                        </div>
+                        
+                        <div style={{ 
+                          marginLeft: 'auto',
+                          padding: '6px 12px',
+                          background: 'rgba(59, 130, 246, 0.05)',
+                          borderRadius: '8px',
+                          border: `1px solid ${accent}22`,
+                          fontSize: '10px',
+                          color: '#93c5fd',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span style={{ fontSize: '14px' }}>🛡️</span>
+                          <span><strong>ADVISORY:</strong> Keep this downloaded copy for further authentication.</span>
+                        </div>
+                      </div>
+                   </div>
+
+                   <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, #3f3f46, transparent)', margin: '40px 0' }} />
                 </div>
               )}
 
@@ -3812,7 +3884,7 @@ END OF RECORD`.trim();
                   {scanResult.type !== 'valid' && (
                     <div style={{ height: 1, background: "#3f3f46", marginBottom: 20 }}></div>
                   )}
-
+                  
                   {scanResult.type === 'valid' ? (
                     <div
                       style={{
@@ -3990,169 +4062,366 @@ END OF RECORD`.trim();
                           <div style={{ color: accent, fontSize: 10, fontWeight: 900, letterSpacing: 1, marginBottom: 8 }}>
                             SHA-256 INTEGRITY HASH
                           </div>
-                          <div style={{ color: "#f4f4f5", fontFamily: "monospace", fontSize: 12, lineHeight: 1.6, wordBreak: "break-all" }}>
-                            {scanResult.hash}
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 18,
-                            padding: "16px 18px",
-                            borderRadius: 10,
-                            background: "rgba(16, 185, 129, 0.08)",
-                            border: "1px solid rgba(16, 185, 129, 0.22)",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 16,
-                            flexWrap: "wrap",
-                          }}
-                        >
-                          <div>
-                            <div style={{ color: "#d1fae5", fontSize: 13, fontWeight: 900, marginBottom: 4 }}>
-                              Scanner Report Ready
-                            </div>
-                            <div style={{ color: "#a7f3d0", fontSize: 12, lineHeight: 1.45 }}>
-                              Download the clean 2-page PDF for this verified scanned package.
-                            </div>
-                          </div>
-                          <button
-                            onClick={downloadForensicReport}
-                            style={{
-                              padding: "10px 18px",
-                              borderRadius: 8,
-                              border: "none",
-                              background: "#10b981",
-                              color: "white",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              fontWeight: 800,
-                              letterSpacing: 0.5,
-                              textTransform: "uppercase",
-                              boxShadow: "0 8px 20px rgba(16, 185, 129, 0.28)",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            Download Report PDF
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        background: "linear-gradient(135deg, #18181b 0%, #111827 100%)",
-                        border: "1px solid rgba(239, 68, 68, 0.35)",
-                        borderRadius: 18,
-                        overflow: "hidden",
-                        boxShadow: "0 18px 40px rgba(0, 0, 0, 0.28)",
-                      }}
-                    >
-                      <div
+	                          <div style={{ color: "#f4f4f5", fontFamily: "monospace", fontSize: 12, lineHeight: 1.6, wordBreak: "break-all" }}>
+	                            {scanResult.hash}
+	                          </div>
+	                        </div>
+	                        <div
+	                          style={{
+	                            marginTop: 18,
+	                            padding: "16px 18px",
+	                            borderRadius: 10,
+	                            background: "rgba(16, 185, 129, 0.08)",
+	                            border: "1px solid rgba(16, 185, 129, 0.22)",
+	                            display: "flex",
+	                            justifyContent: "space-between",
+	                            alignItems: "center",
+	                            gap: 16,
+	                            flexWrap: "wrap",
+	                          }}
+	                        >
+	                          <div>
+	                            <div style={{ color: "#d1fae5", fontSize: 13, fontWeight: 900, marginBottom: 4 }}>
+	                              Scanner Report Ready
+	                            </div>
+	                            <div style={{ color: "#a7f3d0", fontSize: 12, lineHeight: 1.45 }}>
+	                              Download the clean 2-page PDF for this verified scanned package.
+	                            </div>
+	                          </div>
+	                          <button
+	                            onClick={downloadForensicReport}
+	                            style={{
+	                              padding: "10px 18px",
+	                              borderRadius: 8,
+	                              border: "none",
+	                              background: "#10b981",
+	                              color: "white",
+	                              cursor: "pointer",
+	                              fontSize: 12,
+	                              fontWeight: 800,
+	                              letterSpacing: 0.5,
+	                              textTransform: "uppercase",
+	                              boxShadow: "0 8px 20px rgba(16, 185, 129, 0.28)",
+	                              whiteSpace: "nowrap",
+	                            }}
+	                          >
+	                            Download Report PDF
+	                          </button>
+	                        </div>
+	                      </div>
+	                    </div>
+	                  ) : (
+	                    <div
                         style={{
-                          padding: "22px 24px",
-                          borderBottom: "1px solid rgba(239, 68, 68, 0.18)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 16,
-                          flexWrap: "wrap",
-                          alignItems: "flex-start",
+                          background: "linear-gradient(135deg, #18181b 0%, #111827 100%)",
+                          border: "1px solid rgba(239, 68, 68, 0.35)",
+                          borderRadius: 18,
+                          overflow: "hidden",
+                          boxShadow: "0 18px 40px rgba(0, 0, 0, 0.28)",
                         }}
                       >
-                        <div>
-                          <div style={{ color: "#fca5a5", fontSize: 11, fontWeight: 900, letterSpacing: 1.4, marginBottom: 6 }}>
-                            AUTHENTICATION FAILED
-                          </div>
-                          <h3 style={{ margin: 0, fontSize: 21, color: "#f4f4f5", fontWeight: 800 }}>
-                            Non-Phanix QR Detected
-                          </h3>
-                          <p style={{ margin: "8px 0 0", color: "#fca5a5", fontSize: 13, lineHeight: 1.55, maxWidth: 560 }}>
-                            The scanned content does not match the PHANIX forensic architecture.
-                            This data could be malformed, external, or tampered with.
-                          </p>
-                        </div>
                         <div
                           style={{
-                            padding: "7px 12px",
-                            borderRadius: 20,
-                            background: "rgba(239, 68, 68, 0.12)",
-                            border: "1px solid rgba(239, 68, 68, 0.35)",
-                            color: "#fca5a5",
-                            fontSize: 11,
-                            fontWeight: 900,
-                            letterSpacing: 0.8,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          INVALID SIGNATURE
-                        </div>
-                      </div>
-
-                      <div style={{ padding: 24 }}>
-                        <div style={{ color: "#a1a1aa", fontSize: 11, fontWeight: 900, letterSpacing: 1, marginBottom: 10 }}>
-                          EXTRACTED DATA SUMMARY
-                        </div>
-                        <div
-                          style={{
-                            background: "rgba(239, 68, 68, 0.05)",
-                            border: "1px solid rgba(239, 68, 68, 0.15)",
-                            borderRadius: 10,
-                            padding: 18,
-                            marginBottom: 18,
-                          }}
-                        >
-                          <div style={{ color: "#f4f4f5", fontFamily: "monospace", fontSize: 13, wordBreak: "break-all", lineHeight: 1.6 }}>
-                            {scanResult.data}
-                          </div>
-                        </div>
-
-                        <div
-                          style={{
-                            padding: "16px 18px",
-                            borderRadius: 10,
-                            background: "rgba(239, 68, 68, 0.08)",
-                            border: "1px solid rgba(239, 68, 68, 0.22)",
+                            padding: "22px 24px",
+                            borderBottom: "1px solid rgba(239, 68, 68, 0.18)",
                             display: "flex",
                             justifyContent: "space-between",
-                            alignItems: "center",
                             gap: 16,
                             flexWrap: "wrap",
+                            alignItems: "flex-start",
                           }}
                         >
                           <div>
-                            <div style={{ color: "#fecaca", fontSize: 13, fontWeight: 900, marginBottom: 4 }}>
-                              Failed Authentication Report
+                            <div style={{ color: "#fca5a5", fontSize: 11, fontWeight: 900, letterSpacing: 1.4, marginBottom: 6 }}>
+                              AUTHENTICATION FAILED
                             </div>
-                            <div style={{ color: "#fca5a5", fontSize: 12, lineHeight: 1.45 }}>
-                              Download the forensic failure certificate for this scan event.
-                            </div>
+                            <h3 style={{ margin: 0, fontSize: 21, color: "#f4f4f5", fontWeight: 800 }}>
+                              Non-Phanix QR Detected
+                            </h3>
+                            <p style={{ margin: "8px 0 0", color: "#fca5a5", fontSize: 13, lineHeight: 1.55, maxWidth: 560 }}>
+                              The scanned content does not match the PHANIX forensic architecture. 
+                              This data could be malformed, external, or tampered with.
+                            </p>
                           </div>
-                          <button
-                            onClick={downloadForensicReport}
+                          <div
                             style={{
-                              padding: "10px 18px",
-                              borderRadius: 8,
-                              border: "none",
-                              background: "#ef4444",
-                              color: "white",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              fontWeight: 800,
-                              letterSpacing: 0.5,
-                              textTransform: "uppercase",
-                              boxShadow: "0 8px 20px rgba(239, 68, 68, 0.28)",
+                              padding: "7px 12px",
+                              borderRadius: 20,
+                              background: "rgba(239, 68, 68, 0.12)",
+                              border: "1px solid rgba(239, 68, 68, 0.35)",
+                              color: "#fca5a5",
+                              fontSize: 11,
+                              fontWeight: 900,
+                              letterSpacing: 0.8,
                               whiteSpace: "nowrap",
                             }}
                           >
-                            Download Failed Report
-                          </button>
+                            INVALID SIGNATURE
+                          </div>
+                        </div>
+
+                        <div style={{ padding: 24 }}>
+                          <div style={{ color: "#a1a1aa", fontSize: 11, fontWeight: 900, letterSpacing: 1, marginBottom: 10 }}>
+                            EXTRACTED DATA SUMMARY
+                          </div>
+                          <div
+                            style={{
+                              background: "rgba(239, 68, 68, 0.05)",
+                              border: "1px solid rgba(239, 68, 68, 0.15)",
+                              borderRadius: 10,
+                              padding: 18,
+                              marginBottom: 18,
+                            }}
+                          >
+                            <div style={{ color: "#f4f4f5", fontFamily: "monospace", fontSize: 13, wordBreak: "break-all", lineHeight: 1.6 }}>
+                              {scanResult.data}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              padding: "16px 18px",
+                              borderRadius: 10,
+                              background: "rgba(239, 68, 68, 0.08)",
+                              border: "1px solid rgba(239, 68, 68, 0.22)",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: 16,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <div>
+                              <div style={{ color: "#fecaca", fontSize: 13, fontWeight: 900, marginBottom: 4 }}>
+                                Failed Authentication Report
+                              </div>
+                              <div style={{ color: "#fca5a5", fontSize: 12, lineHeight: 1.45 }}>
+                                Download the forensic failure certificate for this scan event.
+                              </div>
+                            </div>
+                            <button
+                              onClick={downloadForensicReport}
+                              style={{
+                                padding: "10px 18px",
+                                borderRadius: 8,
+                                border: "none",
+                                background: "#ef4444",
+                                color: "white",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 800,
+                                letterSpacing: 0.5,
+                                textTransform: "uppercase",
+                                boxShadow: "0 8px 20px rgba(239, 68, 68, 0.28)",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Download Failed Report
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+	                  )}
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ADMIN DASHBOARD - login required, only the admin email can read the list */}
+        {tab === "admin" && (
+          <div style={{ marginTop: 20, maxWidth: 900, marginLeft: "auto", marginRight: "auto" }}>
+
+            {!adminUser && (
+              <div style={{ maxWidth: 380, margin: "40px auto", padding: 28, borderRadius: 16, background: "#18181b", border: "1px solid #27272a" }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#f4f4f5", fontWeight: 600 }}>Admin Login</h3>
+                <p style={{ margin: "0 0 18px", fontSize: 13, color: "#a1a1aa" }}>Only the administrator can see all evidence.</p>
+                <input
+                  type="email"
+                  placeholder="Admin email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  style={{ width: "100%", padding: "10px 12px", marginBottom: 10, borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14 }}
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={adminPass}
+                  onChange={(e) => setAdminPass(e.target.value)}
+                  style={{ width: "100%", padding: "10px 12px", marginBottom: 14, borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14 }}
+                />
+                {adminError && <div style={{ color: "#fca5a5", fontSize: 12, marginBottom: 12 }}>{adminError}</div>}
+                <button
+                  onClick={async () => {
+                    setAdminError("");
+                    try {
+                      await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPass);
+                      setAdminPass("");
+                    } catch {
+                      setAdminError("Login failed. Check email and password.");
+                    }
+                  }}
+                  style={{ width: "100%", padding: "10px 0", borderRadius: 8, border: "none", background: accent, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Login
+                </button>
+              </div>
+            )}
+
+            {adminUser && (
+              <div>
+                {/* TOP BAR */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 20, color: "#f4f4f5", fontWeight: 600 }}>Case Dashboard</h3>
+                    <div style={{ fontSize: 12, color: "#a1a1aa" }}>Logged in as {adminUser.email}</div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await signOut(auth);
+                      await signInAnonymously(auth).catch(() => {});
+                      setAdminList([]);
+                      setAdminPicked(null);
+                    }}
+                    style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid #3f3f46", background: "transparent", color: "#a1a1aa", fontSize: 13, cursor: "pointer" }}
+                  >
+                    Logout
+                  </button>
+                </div>
+
+                {/* SEARCH */}
+                <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+                  <input
+                    type="text"
+                    placeholder="Search by case number"
+                    value={caseSearch}
+                    onChange={(e) => setCaseSearch(e.target.value)}
+                    style={{ flex: 1, minWidth: 200, padding: "10px 12px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14 }}
+                  />
+                  <button
+                    onClick={() => loadAdminList(caseSearch)}
+                    style={{ padding: "10px 22px", borderRadius: 8, border: "none", background: accent, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Search
+                  </button>
+                  <button
+                    onClick={() => { setCaseSearch(""); loadAdminList(""); }}
+                    style={{ padding: "10px 18px", borderRadius: 8, border: "1px solid #3f3f46", background: "transparent", color: "#a1a1aa", fontSize: 14, cursor: "pointer" }}
+                  >
+                    Show all
+                  </button>
+                </div>
+
+                {adminError && <div style={{ color: "#fca5a5", fontSize: 13, marginBottom: 12 }}>{adminError}</div>}
+                {adminLoading && <div style={{ color: "#a1a1aa", fontSize: 13, marginBottom: 12 }}>Loading...</div>}
+
+                {/* LIST */}
+                {!adminPicked && (
+                  <div style={{ borderRadius: 14, background: "#18181b", border: "1px solid #27272a", overflow: "hidden" }}>
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid #27272a", fontSize: 12, color: "#a1a1aa" }}>
+                      {adminList.length} record(s)
+                    </div>
+                    {adminList.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => openAdminRecord(item)}
+                        style={{ padding: "14px 16px", borderBottom: "1px solid #27272a", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}
+                      >
+                        <div>
+                          <div style={{ color: "#f4f4f5", fontSize: 14, fontWeight: 600 }}>
+                            Case {item.case ? item.case.no : item.caseNo} / Exhibit {item.case ? item.case.exhibit : item.exhibitNo}
+                          </div>
+                          <div style={{ color: "#a1a1aa", fontSize: 12, marginTop: 2 }}>
+                            {item.officer ? item.officer.name : item.operator} - {item.createdAt && item.createdAt.toDate ? item.createdAt.toDate().toLocaleString() : ""}
+                          </div>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: "rgba(16,185,129,0.15)", color: "#34d399" }}>
+                          {item.status}
+                        </span>
+                      </div>
+                    ))}
+                    {!adminLoading && adminList.length === 0 && (
+                      <div style={{ padding: 24, color: "#a1a1aa", fontSize: 13, textAlign: "center" }}>No records found.</div>
+                    )}
+                  </div>
+                )}
+
+                {/* ONE RECORD */}
+                {adminPicked && (
+                  <div style={{ borderRadius: 14, background: "#18181b", border: "1px solid #27272a", padding: 22 }}>
+                    <button
+                      onClick={() => setAdminPicked(null)}
+                      style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #3f3f46", background: "transparent", color: "#a1a1aa", fontSize: 12, cursor: "pointer", marginBottom: 16 }}
+                    >
+                      Back to list
+                    </button>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+                      <h3 style={{ margin: 0, fontSize: 18, color: "#f4f4f5", fontWeight: 600 }}>
+                        Case {adminPicked.case ? adminPicked.case.no : adminPicked.caseNo} / Exhibit {adminPicked.case ? adminPicked.case.exhibit : adminPicked.exhibitNo}
+                      </h3>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: "rgba(16,185,129,0.15)", color: "#34d399" }}>
+                        {adminPicked.status}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 18 }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Officer</div>
+                        <div style={{ fontSize: 14, color: "#f4f4f5" }}>{adminPicked.officer ? adminPicked.officer.name : adminPicked.operator}</div>
+                        <div style={{ fontSize: 12, color: "#a1a1aa" }}>Badge {adminPicked.officer ? adminPicked.officer.badge : adminPicked.badge} - {adminPicked.officer ? adminPicked.officer.role : adminPicked.role}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Received by</div>
+                        <div style={{ fontSize: 14, color: "#f4f4f5" }}>{adminPicked.officer ? adminPicked.officer.receivedBy : adminPicked.receivedBy}</div>
+                        <div style={{ fontSize: 12, color: "#a1a1aa" }}>{adminPicked.case ? adminPicked.case.division : adminPicked.division}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Source</div>
+                        <div style={{ fontSize: 14, color: "#f4f4f5" }}>{adminPicked.case ? adminPicked.case.source : adminPicked.source}</div>
+                        <div style={{ fontSize: 12, color: "#a1a1aa" }}>
+                          Seal {adminPicked.case ? adminPicked.case.seal : adminPicked.seal} - {adminPicked.case ? adminPicked.case.priority : adminPicked.priority}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Date logged</div>
+                        <div style={{ fontSize: 14, color: "#f4f4f5" }}>
+                          {adminPicked.createdAt && adminPicked.createdAt.toDate ? adminPicked.createdAt.toDate().toLocaleString() : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ background: "#09090b", borderRadius: 10, padding: 14, marginBottom: 18 }}>
+                      <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Evidence</div>
+                      {adminPicked.evidence && adminPicked.evidence.map((e, i) => (
+                        <div key={i} style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 13, color: "#f4f4f5", fontWeight: 600 }}>{e.title}</div>
+                          <div style={{ fontSize: 13, color: "#d4d4d8", whiteSpace: "pre-wrap" }}>{e.content}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ marginBottom: 18 }}>
+                      <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>SHA-256 hash</div>
+                      <div style={{ fontFamily: "monospace", fontSize: 12, color: "#a1a1aa", background: "#09090b", padding: 10, borderRadius: 8, wordBreak: "break-all", userSelect: "all" }}>
+                        {adminPicked.hash}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#52525b", marginTop: 6 }}>Evidence ID: {adminPicked.id}</div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>History</div>
+                      {adminHistory.map((h, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: "1px solid #27272a", fontSize: 13 }}>
+                          <span style={{ color: "#f4f4f5" }}>{h.action}{h.result ? " - " + h.result : ""}{h.by ? " by " + h.by : ""}</span>
+                          <span style={{ color: "#a1a1aa" }}>{h.time && h.time.toDate ? h.time.toDate().toLocaleString() : ""}</span>
+                        </div>
+                      ))}
+                      {adminHistory.length === 0 && <div style={{ color: "#a1a1aa", fontSize: 13 }}>No history yet.</div>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -4184,11 +4453,11 @@ END OF RECORD`.trim();
                 background: 'radial-gradient(circle at top right, rgba(59, 130, 246, 0.06) 0%, transparent 60%)',
                 pointerEvents: 'none'
               }} />
-
+              
               <div style={{ position: 'relative', zIndex: 1 }}>
-                <h2 style={{
-                  margin: '0 0 20px 0',
-                  fontSize: 42,
+                <h2 style={{ 
+                  margin: '0 0 20px 0', 
+                  fontSize: 42, 
                   fontWeight: 700,
                   letterSpacing: '-1.2px',
                   background: 'linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%)',
@@ -4196,12 +4465,12 @@ END OF RECORD`.trim();
                   WebkitTextFillColor: 'transparent',
                   lineHeight: 1.1
                 }}>
-                  Digital Integrity.<br />Unbreakable Trust.
+                  Digital Integrity.<br/>Unbreakable Trust.
                 </h2>
-                <p style={{
+                <p style={{ 
                   color: '#a1a1aa',
-                  lineHeight: 1.8,
-                  fontSize: 17,
+                  lineHeight: 1.8, 
+                  fontSize: 17, 
                   maxWidth: '680px',
                   margin: 0,
                   fontWeight: 400
@@ -4213,60 +4482,60 @@ END OF RECORD`.trim();
 
             {/* PRINCIPLES GRID - Apple Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 24, marginBottom: 48 }}>
-              {[
-                { icon: "🔒", title: "Immutable Ledger", desc: "Once data is sealed, not a single bit can be altered without breaking the cryptographic signature." },
-                { icon: "🔗", title: "Chain of Custody", desc: "Every step from collection to archiving is timestamped and identity-verified." },
-                { icon: "👁️", title: "Zero-Trust Verify", desc: "Verification relies on mathematical certainty (SHA-256), not human trust." }
-              ].map((item, i) => (
-                <div key={i} style={{
-                  background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  borderRadius: 20,
-                  padding: 32,
-                  transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.transform = 'translateY(-4px)';
-                    e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.15)';
-                    e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
-                  }}
-                >
-                  <div style={{
-                    fontSize: 48,
-                    marginBottom: 20,
-                    filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.2))'
-                  }}>{item.icon}</div>
-                  <h3 style={{
-                    margin: "0 0 12px",
-                    fontSize: 19,
-                    fontWeight: 600,
-                    color: "#f4f4f5",
-                    letterSpacing: '-0.3px'
-                  }}>{item.title}</h3>
-                  <p style={{
-                    margin: 0,
-                    fontSize: 14,
-                    color: '#a1a1aa',
-                    lineHeight: 1.6,
-                    fontWeight: 400
-                  }}>{item.desc}</p>
-                </div>
-              ))}
+                {[
+                    { icon: "🔒", title: "Immutable Ledger", desc: "Once data is sealed, not a single bit can be altered without breaking the cryptographic signature." },
+                    { icon: "🔗", title: "Chain of Custody", desc: "Every step from collection to archiving is timestamped and identity-verified." },
+                    { icon: "👁️", title: "Zero-Trust Verify", desc: "Verification relies on mathematical certainty (SHA-256), not human trust." }
+                ].map((item, i) => (
+                    <div key={i} style={{
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
+                        backdropFilter: 'blur(16px)',
+                        WebkitBackdropFilter: 'blur(16px)',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        borderRadius: 20,
+                        padding: 32,
+                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                        position: 'relative',
+                        overflow: 'hidden'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = 'translateY(-4px)';
+                      e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.15)';
+                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
+                    }}
+                    >
+                        <div style={{ 
+                          fontSize: 48, 
+                          marginBottom: 20,
+                          filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.2))'
+                        }}>{item.icon}</div>
+                        <h3 style={{ 
+                          margin: "0 0 12px", 
+                          fontSize: 19, 
+                          fontWeight: 600,
+                          color: "#f4f4f5",
+                          letterSpacing: '-0.3px'
+                        }}>{item.title}</h3>
+                        <p style={{ 
+                          margin: 0, 
+                          fontSize: 14, 
+                          color: '#a1a1aa',
+                          lineHeight: 1.6,
+                          fontWeight: 400
+                        }}>{item.desc}</p>
+                    </div>
+                ))}
             </div>
 
             {/* VISUAL FLOW - Apple Timeline */}
-            <div style={{
+            <div style={{ 
               background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
               backdropFilter: 'blur(20px)',
               WebkitBackdropFilter: 'blur(20px)',
@@ -4276,64 +4545,64 @@ END OF RECORD`.trim();
               marginBottom: 40,
               boxShadow: '0 4px 24px rgba(0,0,0,0.1)'
             }}>
-              <h3 style={{
-                fontSize: 13,
-                textTransform: "uppercase",
-                letterSpacing: '1.2px',
-                color: accent,
-                marginBottom: 32,
-                fontWeight: 700,
-                margin: '0 0 32px 0'
-              }}>
-                Evidence Security Pipeline
-              </h3>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 16
-              }}>
-                {[
-                  { label: "Raw Evidence", icon: "📁" },
-                  { label: "SHA-256 Hash", icon: "🔐" },
-                  { label: "Digital Seal", icon: "✓" },
-                  { label: "QR Anchor", icon: "⚡" }
-                ].map((step, i) => (
-                  <React.Fragment key={i}>
-                    <div style={{
-                      flex: 1,
-                      minWidth: 140,
-                      padding: "16px 20px",
-                      background: i === 3
-                        ? `linear-gradient(135deg, ${accent} 0%, #2563eb 100%)`
-                        : 'rgba(255,255,255,0.04)',
-                      borderRadius: 14,
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: i === 3 ? "white" : "#f4f4f5",
-                      border: i === 3 ? "none" : "1px solid rgba(255,255,255,0.08)",
-                      boxShadow: i === 3 ? `0 4px 16px rgba(59, 130, 246, 0.3)` : 'none',
-                      transition: 'all 0.3s ease',
-                      textAlign: 'center',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}>
-                      <span style={{ fontSize: '18px' }}>{step.icon}</span>
-                      {step.label}
-                    </div>
-                    {i < 3 && (
-                      <div style={{
-                        color: "rgba(255,255,255,0.3)",
-                        fontSize: '20px',
-                        fontWeight: 300
-                      }}>→</div>
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
+                <h3 style={{ 
+                  fontSize: 13, 
+                  textTransform: "uppercase", 
+                  letterSpacing: '1.2px', 
+                  color: accent, 
+                  marginBottom: 32,
+                  fontWeight: 700,
+                  margin: '0 0 32px 0'
+                }}>
+                    Evidence Security Pipeline
+                </h3>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  flexWrap: 'wrap', 
+                  gap: 16
+                }}>
+                    {[
+                      { label: "Raw Evidence", icon: "📁" },
+                      { label: "SHA-256 Hash", icon: "🔐" },
+                      { label: "Digital Seal", icon: "✓" },
+                      { label: "QR Anchor", icon: "⚡" }
+                    ].map((step, i) => (
+                        <React.Fragment key={i}>
+                            <div style={{
+                                flex: 1,
+                                minWidth: 140,
+                                padding: "16px 20px",
+                                background: i === 3 
+                                  ? `linear-gradient(135deg, ${accent} 0%, #2563eb 100%)`
+                                  : 'rgba(255,255,255,0.04)',
+                                borderRadius: 14,
+                                fontSize: 14,
+                                fontWeight: 600,
+                                color: i === 3 ? "white" : "#f4f4f5",
+                                border: i === 3 ? "none" : "1px solid rgba(255,255,255,0.08)",
+                                boxShadow: i === 3 ? `0 4px 16px rgba(59, 130, 246, 0.3)` : 'none',
+                                transition: 'all 0.3s ease',
+                                textAlign: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}>
+                                <span style={{ fontSize: '18px' }}>{step.icon}</span>
+                                {step.label}
+                            </div>
+                            {i < 3 && (
+                              <div style={{ 
+                                color: "rgba(255,255,255,0.3)",
+                                fontSize: '20px',
+                                fontWeight: 300
+                              }}>→</div>
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
             </div>
 
             {/* INTERACTIVE TERMINAL - Apple macOS Style */}
@@ -4350,43 +4619,43 @@ END OF RECORD`.trim();
               }}
             >
               {/* macOS Window Controls */}
-              <div style={{
-                background: 'linear-gradient(180deg, rgba(24,24,27,0.95) 0%, rgba(24,24,27,0.98) 100%)',
-                padding: "14px 20px",
-                borderBottom: "1px solid rgba(255,255,255,0.05)",
-                display: "flex",
-                alignItems: "center",
-                gap: 8
+              <div style={{ 
+                  background: 'linear-gradient(180deg, rgba(24,24,27,0.95) 0%, rgba(24,24,27,0.98) 100%)',
+                  padding: "14px 20px", 
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8
               }}>
-                <div style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  background: "#ff5f56",
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-                }}></div>
-                <div style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  background: "#ffbd2e",
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-                }}></div>
-                <div style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  background: "#27c93f",
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-                }}></div>
-                <span style={{
-                  marginLeft: 12,
-                  fontSize: 13,
-                  color: '#a1a1aa',
-                  fontFamily: "SF Mono, Menlo, Monaco, monospace",
-                  fontWeight: 500,
-                  letterSpacing: '-0.2px'
-                }}>phanix_hash_terminal</span>
+                  <div style={{ 
+                    width: 12, 
+                    height: 12, 
+                    borderRadius: "50%", 
+                    background: "#ff5f56",
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                  }}></div>
+                  <div style={{ 
+                    width: 12, 
+                    height: 12, 
+                    borderRadius: "50%", 
+                    background: "#ffbd2e",
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                  }}></div>
+                  <div style={{ 
+                    width: 12, 
+                    height: 12, 
+                    borderRadius: "50%", 
+                    background: "#27c93f",
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                  }}></div>
+                  <span style={{ 
+                    marginLeft: 12, 
+                    fontSize: 13, 
+                    color: '#a1a1aa',
+                    fontFamily: "SF Mono, Menlo, Monaco, monospace",
+                    fontWeight: 500,
+                    letterSpacing: '-0.2px'
+                  }}>phanix_hash_terminal</span>
               </div>
 
               <div style={{ padding: 30 }}>
@@ -4403,59 +4672,59 @@ END OF RECORD`.trim();
                 >
                   LIVE HASH SIMULATION KERNEL
                 </label>
-
+                
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 15 }}>
-                  <span style={{ color: "#27c93f", fontWeight: "bold" }}>❯</span>
-                  <input
+                    <span style={{ color: "#27c93f", fontWeight: "bold" }}>❯</span>
+                    <input
                     placeholder="Type evidence string here to generate hash..."
                     onChange={(e) =>
-                      setDemoHash(
+                        setDemoHash(
                         e.target.value
-                          ? CryptoJS.SHA256(e.target.value).toString()
-                          : ""
-                      )
+                            ? CryptoJS.SHA256(e.target.value).toString()
+                            : ""
+                        )
                     }
                     style={{
-                      width: "100%",
-                      background: "transparent",
-                      border: "none",
-                      color: "#f4f4f5",
-                      fontFamily: "monospace",
-                      fontSize: 15,
-                      outline: "none",
+                        width: "100%",
+                        background: "transparent",
+                        border: "none",
+                        color: "#f4f4f5",
+                        fontFamily: "monospace",
+                        fontSize: 15,
+                        outline: "none",
                     }}
                     autoFocus
-                  />
+                    />
                 </div>
 
                 {demoHash ? (
-                  <div style={{ animation: "fadeIn 0.2s" }}>
-                    <div style={{ height: 1, background: "rgba(255,255,255,0.1)", margin: "10px 0 20px" }}></div>
-                    <div style={{ fontFamily: "monospace", fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 5 }}>
+                    <div style={{ animation: "fadeIn 0.2s" }}>
+                        <div style={{ height: 1, background: "rgba(255,255,255,0.1)", margin: "10px 0 20px" }}></div>
+                        <div style={{ fontFamily: "monospace", fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 5 }}>
                             // SHA-256 OUTPUT ({demoHash.length * 4} bits)
+                        </div>
+                        <div
+                        style={{
+                            color: accent,
+                            fontFamily: "monospace",
+                            fontSize: 14,
+                            wordBreak: "break-all",
+                            lineHeight: 1.6
+                        }}
+                        >
+                        {demoHash}
+                        </div>
                     </div>
-                    <div
-                      style={{
-                        color: accent,
-                        fontFamily: "monospace",
-                        fontSize: 14,
-                        wordBreak: "break-all",
-                        lineHeight: 1.6
-                      }}
-                    >
-                      {demoHash}
-                    </div>
-                  </div>
                 ) : (
-                  <div style={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.2, fontSize: 13, fontFamily: "monospace" }}>
-                    [ WAITING FOR INPUT STREAM... ]
-                  </div>
+                    <div style={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.2, fontSize: 13, fontFamily: "monospace" }}>
+                        [ WAITING FOR INPUT STREAM... ]
+                    </div>
                 )}
               </div>
             </div>
 
             {/* USE CASES - Apple Style */}
-            <div style={{
+            <div style={{ 
               background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
               backdropFilter: 'blur(20px)',
               WebkitBackdropFilter: 'blur(20px)',
@@ -4465,48 +4734,48 @@ END OF RECORD`.trim();
               marginBottom: 40,
               boxShadow: '0 4px 24px rgba(0,0,0,0.1)'
             }}>
-              <h3 style={{
-                fontSize: 13,
-                textTransform: "uppercase",
-                letterSpacing: '1.2px',
-                color: accent,
+              <h3 style={{ 
+                fontSize: 13, 
+                textTransform: "uppercase", 
+                letterSpacing: '1.2px', 
+                color: accent, 
                 marginBottom: 32,
                 fontWeight: 700,
                 margin: '0 0 32px 0'
               }}>
                 Real-World Applications
               </h3>
-
+              
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
                 {[
-                  {
-                    icon: "⚖️",
-                    title: "Legal & Law Enforcement",
+                  { 
+                    icon: "⚖️", 
+                    title: "Legal & Law Enforcement", 
                     desc: "Secure chain of custody for crime scene evidence, ensuring admissibility in court proceedings."
                   },
-                  {
-                    icon: "🏥",
-                    title: "Healthcare & Medical",
+                  { 
+                    icon: "🏥", 
+                    title: "Healthcare & Medical", 
                     desc: "Patient data integrity, pharmaceutical tracking, and medical device authentication."
                   },
-                  {
-                    icon: "🏭",
-                    title: "Industrial & Manufacturing",
+                  { 
+                    icon: "🏭", 
+                    title: "Industrial & Manufacturing", 
                     desc: "Quality control documentation, product authentication, and supply chain verification."
                   },
-                  {
-                    icon: "🎓",
-                    title: "Academic & Research",
+                  { 
+                    icon: "🎓", 
+                    title: "Academic & Research", 
                     desc: "Data integrity for research findings, credential verification, and intellectual property protection."
                   },
-                  {
-                    icon: "💼",
-                    title: "Corporate Compliance",
+                  { 
+                    icon: "💼", 
+                    title: "Corporate Compliance", 
                     desc: "Audit trails, document authenticity, regulatory compliance, and whistleblower protection."
                   },
-                  {
-                    icon: "🔐",
-                    title: "Cybersecurity",
+                  { 
+                    icon: "🔐", 
+                    title: "Cybersecurity", 
                     desc: "Incident response documentation, forensic evidence preservation, and secure communications."
                   }
                 ].map((useCase, i) => (
@@ -4518,30 +4787,30 @@ END OF RECORD`.trim();
                     transition: 'all 0.3s ease',
                     cursor: 'pointer'
                   }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.2)';
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                    e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.2)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
                   >
                     <div style={{ fontSize: 32, marginBottom: 12 }}>{useCase.icon}</div>
-                    <h4 style={{
-                      margin: '0 0 8px 0',
-                      fontSize: 16,
-                      fontWeight: 600,
+                    <h4 style={{ 
+                      margin: '0 0 8px 0', 
+                      fontSize: 16, 
+                      fontWeight: 600, 
                       color: '#f4f4f5',
                       letterSpacing: '-0.2px'
                     }}>{useCase.title}</h4>
-                    <p style={{
-                      margin: 0,
-                      fontSize: 13,
-                      color: '#a1a1aa',
-                      lineHeight: 1.6
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: 13, 
+                      color: '#a1a1aa', 
+                      lineHeight: 1.6 
                     }}>{useCase.desc}</p>
                   </div>
                 ))}
@@ -4549,7 +4818,7 @@ END OF RECORD`.trim();
             </div>
 
             {/* SECURITY FEATURES - Premium List */}
-            <div style={{
+            <div style={{ 
               background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
               backdropFilter: 'blur(20px)',
               WebkitBackdropFilter: 'blur(20px)',
@@ -4559,41 +4828,41 @@ END OF RECORD`.trim();
               marginBottom: 40,
               boxShadow: '0 4px 24px rgba(0,0,0,0.1)'
             }}>
-              <h3 style={{
-                fontSize: 13,
-                textTransform: "uppercase",
-                letterSpacing: '1.2px',
-                color: accent,
+              <h3 style={{ 
+                fontSize: 13, 
+                textTransform: "uppercase", 
+                letterSpacing: '1.2px', 
+                color: accent, 
                 marginBottom: 32,
                 fontWeight: 700,
                 margin: '0 0 32px 0'
               }}>
                 Advanced Security Features
               </h3>
-
+              
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 24 }}>
                 {[
-                  {
+                  { 
                     feature: "SHA-256 Cryptographic Hashing",
                     detail: "Military-grade 256-bit cryptographic algorithm ensures data integrity with collision resistance of 2^256."
                   },
-                  {
+                  { 
                     feature: "Tamper-Evident Design",
                     detail: "Any modification to the data instantly invalidates the digital signature, providing immediate detection."
                   },
-                  {
+                  { 
                     feature: "Timestamp Authentication",
                     detail: "ISO 8601 timestamping creates verifiable chronological evidence for legal and compliance purposes."
                   },
-                  {
+                  { 
                     feature: "Identity Verification",
                     detail: "Operator credentials embedded within the secure package ensure accountability and traceability."
                   },
-                  {
+                  { 
                     feature: "QR Code Redundancy",
                     detail: "High error correction allows up to 30% damage tolerance while maintaining data recoverability."
                   },
-                  {
+                  { 
                     feature: "Offline Verification",
                     detail: "No internet required - scan and verify evidence integrity anywhere, anytime."
                   }
@@ -4607,8 +4876,8 @@ END OF RECORD`.trim();
                     border: '1px solid rgba(255,255,255,0.04)',
                     transition: 'all 0.3s ease'
                   }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.2)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)'}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.2)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)'}
                   >
                     <div style={{
                       minWidth: 28,
@@ -4624,17 +4893,17 @@ END OF RECORD`.trim();
                       boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                     }}>✓</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: 15,
-                        fontWeight: 600,
-                        color: '#f4f4f5',
+                      <div style={{ 
+                        fontSize: 15, 
+                        fontWeight: 600, 
+                        color: '#f4f4f5', 
                         marginBottom: 6,
                         letterSpacing: '-0.2px'
                       }}>{item.feature}</div>
-                      <div style={{
-                        fontSize: 13,
-                        color: '#a1a1aa',
-                        lineHeight: 1.6
+                      <div style={{ 
+                        fontSize: 13, 
+                        color: '#a1a1aa', 
+                        lineHeight: 1.6 
                       }}>{item.detail}</div>
                     </div>
                   </div>
@@ -4643,7 +4912,7 @@ END OF RECORD`.trim();
             </div>
 
             {/* KEY BENEFITS - Split Layout */}
-            <div style={{
+            <div style={{ 
               background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
               backdropFilter: 'blur(20px)',
               WebkitBackdropFilter: 'blur(20px)',
@@ -4653,18 +4922,18 @@ END OF RECORD`.trim();
               marginBottom: 40,
               boxShadow: '0 4px 24px rgba(0,0,0,0.1)'
             }}>
-              <h3 style={{
-                fontSize: 13,
-                textTransform: "uppercase",
-                letterSpacing: '1.2px',
-                color: accent,
+              <h3 style={{ 
+                fontSize: 13, 
+                textTransform: "uppercase", 
+                letterSpacing: '1.2px', 
+                color: accent, 
                 marginBottom: 32,
                 fontWeight: 700,
                 margin: '0 0 32px 0'
               }}>
                 Why Choose P.H.A.N.I.X Forensic QR
               </h3>
-
+              
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 32 }}>
                 {[
                   { icon: "⚡", title: "Instant Verification", desc: "Scan and verify in seconds with real-time integrity checks." },
@@ -4675,23 +4944,23 @@ END OF RECORD`.trim();
                   { icon: "🎯", title: "Zero Trust Model", desc: "Mathematical certainty, not reliance on third parties." }
                 ].map((benefit, i) => (
                   <div key={i} style={{ textAlign: 'center' }}>
-                    <div style={{
-                      fontSize: 40,
+                    <div style={{ 
+                      fontSize: 40, 
                       marginBottom: 16,
                       filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.2))'
                     }}>{benefit.icon}</div>
-                    <h4 style={{
-                      margin: '0 0 8px 0',
-                      fontSize: 17,
-                      fontWeight: 600,
+                    <h4 style={{ 
+                      margin: '0 0 8px 0', 
+                      fontSize: 17, 
+                      fontWeight: 600, 
                       color: '#f4f4f5',
                       letterSpacing: '-0.3px'
                     }}>{benefit.title}</h4>
-                    <p style={{
-                      margin: 0,
-                      fontSize: 13,
-                      color: '#a1a1aa',
-                      lineHeight: 1.6
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: 13, 
+                      color: '#a1a1aa', 
+                      lineHeight: 1.6 
                     }}>{benefit.desc}</p>
                   </div>
                 ))}
@@ -4699,7 +4968,7 @@ END OF RECORD`.trim();
             </div>
 
             {/* BEST PRACTICES - Professional Cards */}
-            <div style={{
+            <div style={{ 
               background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
               backdropFilter: 'blur(20px)',
               WebkitBackdropFilter: 'blur(20px)',
@@ -4709,18 +4978,18 @@ END OF RECORD`.trim();
               marginBottom: 40,
               boxShadow: '0 4px 24px rgba(0,0,0,0.1)'
             }}>
-              <h3 style={{
-                fontSize: 13,
-                textTransform: "uppercase",
-                letterSpacing: '1.2px',
-                color: accent,
+              <h3 style={{ 
+                fontSize: 13, 
+                textTransform: "uppercase", 
+                letterSpacing: '1.2px', 
+                color: accent, 
                 marginBottom: 12,
                 fontWeight: 700,
                 margin: '0 0 12px 0'
               }}>
                 Best Practices & Guidelines
               </h3>
-              <p style={{
+              <p style={{ 
                 color: '#a1a1aa',
                 fontSize: 14,
                 lineHeight: 1.7,
@@ -4729,33 +4998,33 @@ END OF RECORD`.trim();
               }}>
                 Follow these recommendations to ensure maximum security and legal compliance when using the Forensic QR Architect.
               </p>
-
+              
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {[
-                  {
-                    step: "1",
-                    title: "Complete Information",
-                    desc: "Always fill in all required fields including operator name, badge ID, role, and evidence source for full accountability."
+                  { 
+                    step: "1", 
+                    title: "Complete Information", 
+                    desc: "Always fill in all required fields including operator name, badge ID, role, and evidence source for full accountability." 
                   },
-                  {
-                    step: "2",
-                    title: "Secure Storage",
-                    desc: "Store generated QR codes in multiple secure locations (physical and digital) to prevent loss or destruction."
+                  { 
+                    step: "2", 
+                    title: "Secure Storage", 
+                    desc: "Store generated QR codes in multiple secure locations (physical and digital) to prevent loss or destruction." 
                   },
-                  {
-                    step: "3",
-                    title: "Immediate Generation",
-                    desc: "Generate QR codes as soon as evidence is collected to establish the earliest possible timestamp."
+                  { 
+                    step: "3", 
+                    title: "Immediate Generation", 
+                    desc: "Generate QR codes as soon as evidence is collected to establish the earliest possible timestamp." 
                   },
-                  {
-                    step: "4",
-                    title: "Regular Verification",
-                    desc: "Periodically scan and verify QR codes to ensure they remain readable and the integrity is intact."
+                  { 
+                    step: "4", 
+                    title: "Regular Verification", 
+                    desc: "Periodically scan and verify QR codes to ensure they remain readable and the integrity is intact." 
                   },
-                  {
-                    step: "5",
-                    title: "Documentation",
-                    desc: "Maintain detailed logs of when QR codes were generated, scanned, and by whom for complete audit trails."
+                  { 
+                    step: "5", 
+                    title: "Documentation", 
+                    desc: "Maintain detailed logs of when QR codes were generated, scanned, and by whom for complete audit trails." 
                   }
                 ].map((practice, i) => (
                   <div key={i} style={{
@@ -4767,14 +5036,14 @@ END OF RECORD`.trim();
                     borderLeft: '3px solid rgba(59, 130, 246, 0.3)',
                     transition: 'all 0.3s ease'
                   }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.05)';
-                      e.currentTarget.style.borderLeftColor = accent;
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
-                      e.currentTarget.style.borderLeftColor = 'rgba(59, 130, 246, 0.3)';
-                    }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(59, 130, 246, 0.05)';
+                    e.currentTarget.style.borderLeftColor = accent;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                    e.currentTarget.style.borderLeftColor = 'rgba(59, 130, 246, 0.3)';
+                  }}
                   >
                     <div style={{
                       minWidth: 40,
@@ -4790,17 +5059,17 @@ END OF RECORD`.trim();
                       color: accent
                     }}>{practice.step}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: 16,
-                        fontWeight: 600,
-                        color: '#f4f4f5',
+                      <div style={{ 
+                        fontSize: 16, 
+                        fontWeight: 600, 
+                        color: '#f4f4f5', 
                         marginBottom: 6,
                         letterSpacing: '-0.2px'
                       }}>{practice.title}</div>
-                      <div style={{
-                        fontSize: 14,
-                        color: '#a1a1aa',
-                        lineHeight: 1.6
+                      <div style={{ 
+                        fontSize: 14, 
+                        color: '#a1a1aa', 
+                        lineHeight: 1.6 
                       }}>{practice.desc}</div>
                     </div>
                   </div>

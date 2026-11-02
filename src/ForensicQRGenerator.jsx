@@ -82,6 +82,15 @@ export default function ForensicQRGenerator() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminPicked, setAdminPicked] = useState(null);
   const [adminHistory, setAdminHistory] = useState([]);
+  const [adminStatusFilter, setAdminStatusFilter] = useState("ALL");
+  const [adminPriorityFilter, setAdminPriorityFilter] = useState("ALL");
+  const [adminDivisionFilter, setAdminDivisionFilter] = useState("ALL");
+  const [adminSealFilter, setAdminSealFilter] = useState("ALL");
+  const [adminDateFrom, setAdminDateFrom] = useState("");
+  const [adminDateTo, setAdminDateTo] = useState("");
+  const [adminSortBy, setAdminSortBy] = useState("newest");
+  const [adminPage, setAdminPage] = useState(1);
+  const [adminCopyFeedback, setAdminCopyFeedback] = useState("");
   const [name, setName] = useState("");
   const [badge, setBadge] = useState("");
   const [role, setRole] = useState("");
@@ -170,19 +179,18 @@ export default function ForensicQRGenerator() {
     return () => stop();
   }, []);
 
-  // ADMIN: load the list of evidence (all, or one case number)
-  const loadAdminList = async (caseNo) => {
+  // ADMIN: load up to 500 records once (all searching and filtering is done client-side)
+  const loadAdminList = async () => {
     setAdminLoading(true);
     setAdminError("");
     setAdminPicked(null);
     try {
-      let q = null;
-      if (caseNo.trim()) {
-        q = query(collection(db, "evidence"), where("case.no", "==", caseNo.trim()), limit(100));
-      } else {
-        q = query(collection(db, "evidence"), orderBy("createdAt", "desc"), limit(100));
+      let snap;
+      try {
+        snap = await getDocs(query(collection(db, "evidence"), orderBy("createdAt", "desc"), limit(500)));
+      } catch (err) {
+        snap = await getDocs(query(collection(db, "evidence"), limit(500)));
       }
-      const snap = await getDocs(q);
       setAdminList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e) {
       setAdminError("Could not load: " + e.message);
@@ -205,7 +213,7 @@ export default function ForensicQRGenerator() {
   // ADMIN: load the list when the admin opens the tab
   useEffect(() => {
     if (tab === "admin" && adminUser) {
-      loadAdminList("");
+      loadAdminList();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, adminUser]);
@@ -4229,201 +4237,972 @@ END OF RECORD`.trim();
         )}
 
         {/* ADMIN DASHBOARD - login required, only the admin email can read the list */}
-        {tab === "admin" && (
-          <div style={{ marginTop: 20, maxWidth: 900, marginLeft: "auto", marginRight: "auto" }}>
+        {tab === "admin" && (() => {
+          // Normalization helper supporting new nested structure and older flat fields
+          const normalizeItem = (item) => {
+            if (!item) return {};
+            const caseNo = (item.case && item.case.no) || item.caseNo || "";
+            const exhibit = (item.case && item.case.exhibit) || item.exhibitNo || "";
+            const division = (item.case && item.case.division) || item.division || item.labDivision || "Digital Forensics";
+            const priority = (item.case && item.case.priority) || item.priority || item.priorityLevel || "Routine";
+            const seal = (item.case && item.case.seal) || item.seal || item.sealCondition || "Intact";
+            const source = (item.case && item.case.source) || item.source || item.evidenceSource || "";
 
-            {!adminUser && (
-              <div style={{ maxWidth: 380, margin: "40px auto", padding: 28, borderRadius: 16, background: "#18181b", border: "1px solid #27272a" }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#f4f4f5", fontWeight: 600 }}>Admin Login</h3>
-                <p style={{ margin: "0 0 18px", fontSize: 13, color: "#a1a1aa" }}>Only the administrator can see all evidence.</p>
-                <input
-                  type="email"
-                  placeholder="Admin email"
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  style={{ width: "100%", padding: "10px 12px", marginBottom: 10, borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14 }}
-                />
-                <input
-                  type="password"
-                  placeholder="Password"
-                  value={adminPass}
-                  onChange={(e) => setAdminPass(e.target.value)}
-                  style={{ width: "100%", padding: "10px 12px", marginBottom: 14, borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14 }}
-                />
-                {adminError && <div style={{ color: "#fca5a5", fontSize: 12, marginBottom: 12 }}>{adminError}</div>}
-                <button
-                  onClick={async () => {
-                    setAdminError("");
-                    try {
-                      await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPass);
-                      setAdminPass("");
-                    } catch {
-                      setAdminError("Login failed. Check email and password.");
-                    }
-                  }}
-                  style={{ width: "100%", padding: "10px 0", borderRadius: 8, border: "none", background: accent, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-                >
-                  Login
-                </button>
-              </div>
-            )}
+            const officerName = (item.officer && item.officer.name) || item.operator || item.officerName || "";
+            const badge = (item.officer && item.officer.badge) || item.badge || "";
+            const role = (item.officer && item.officer.role) || item.role || "";
+            const receivedBy = (item.officer && item.officer.receivedBy) || item.receivedBy || "";
 
-            {adminUser && (
-              <div>
-                {/* TOP BAR */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 20, color: "#f4f4f5", fontWeight: 600 }}>Case Dashboard</h3>
-                    <div style={{ fontSize: 12, color: "#a1a1aa" }}>Logged in as {adminUser.email}</div>
+            let dateObj = null;
+            if (item.createdAt) {
+              if (typeof item.createdAt.toDate === "function") {
+                dateObj = item.createdAt.toDate();
+              } else if (item.createdAt instanceof Date) {
+                dateObj = item.createdAt;
+              } else if (typeof item.createdAt === "number" || typeof item.createdAt === "string") {
+                dateObj = new Date(item.createdAt);
+              }
+            }
+            if (!dateObj && item.ts) {
+              dateObj = new Date(item.ts);
+            }
+
+            const evidenceList = Array.isArray(item.evidence)
+              ? item.evidence
+              : Array.isArray(item.sections)
+              ? item.sections
+              : [];
+
+            const evidenceText = evidenceList.map((e) => `${e.title || ""} ${e.content || ""}`).join(" ");
+            const status = item.status || "SEALED";
+            const hash = item.hash || "";
+            const id = item.id || item.uuid || "";
+
+            return {
+              raw: item,
+              id,
+              caseNo,
+              exhibit,
+              division,
+              priority,
+              seal,
+              source,
+              officerName,
+              badge,
+              role,
+              receivedBy,
+              dateObj,
+              dateStr: dateObj ? dateObj.toLocaleString() : "Date N/A",
+              isoDate: dateObj ? dateObj.toISOString().slice(0, 10) : "",
+              evidenceList,
+              evidenceText,
+              status,
+              hash
+            };
+          };
+
+          const allNormalized = adminList.map(normalizeItem);
+
+          // Metrics calculation
+          const today = new Date();
+          const isToday = (d) =>
+            d &&
+            d.getFullYear() === today.getFullYear() &&
+            d.getMonth() === today.getMonth() &&
+            d.getDate() === today.getDate();
+
+          const totalRecords = allNormalized.length;
+          const recordsToday = allNormalized.filter((r) => isToday(r.dateObj)).length;
+          const totalCases = new Set(allNormalized.map((r) => r.caseNo.trim()).filter(Boolean)).size;
+          const totalOfficers = new Set(allNormalized.map((r) => r.officerName.trim()).filter(Boolean)).size;
+
+          // Client-side filtering
+          const filtered = allNormalized.filter((rec) => {
+            // Main search matches case number, exhibit number, officer name, badge, evidence text, source, evidence ID
+            if (caseSearch.trim()) {
+              const q = caseSearch.trim().toLowerCase();
+              const corpus = [
+                rec.caseNo,
+                rec.exhibit,
+                rec.officerName,
+                rec.badge,
+                rec.evidenceText,
+                rec.source,
+                rec.id
+              ].join(" ").toLowerCase();
+              if (!corpus.includes(q)) return false;
+            }
+
+            // Dropdown filters
+            if (adminStatusFilter !== "ALL") {
+              if (rec.status.toUpperCase() !== adminStatusFilter.toUpperCase()) return false;
+            }
+            if (adminPriorityFilter !== "ALL") {
+              if (rec.priority.toLowerCase() !== adminPriorityFilter.toLowerCase()) return false;
+            }
+            if (adminDivisionFilter !== "ALL") {
+              if (rec.division.toLowerCase() !== adminDivisionFilter.toLowerCase()) return false;
+            }
+            if (adminSealFilter !== "ALL") {
+              if (rec.seal.toLowerCase() !== adminSealFilter.toLowerCase()) return false;
+            }
+
+            // Date Range filters
+            if (adminDateFrom) {
+              const fromTime = new Date(adminDateFrom + "T00:00:00").getTime();
+              if (!rec.dateObj || rec.dateObj.getTime() < fromTime) return false;
+            }
+            if (adminDateTo) {
+              const toTime = new Date(adminDateTo + "T23:59:59.999").getTime();
+              if (!rec.dateObj || rec.dateObj.getTime() > toTime) return false;
+            }
+
+            return true;
+          });
+
+          // Sort records
+          filtered.sort((a, b) => {
+            if (adminSortBy === "newest") {
+              const ta = a.dateObj ? a.dateObj.getTime() : 0;
+              const tb = b.dateObj ? b.dateObj.getTime() : 0;
+              return tb - ta;
+            }
+            if (adminSortBy === "oldest") {
+              const ta = a.dateObj ? a.dateObj.getTime() : 0;
+              const tb = b.dateObj ? b.dateObj.getTime() : 0;
+              return ta - tb;
+            }
+            if (adminSortBy === "caseNo") {
+              return a.caseNo.localeCompare(b.caseNo, undefined, { numeric: true, sensitivity: "base" });
+            }
+            return 0;
+          });
+
+          // Pagination
+          const pageSize = 20;
+          const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+          const safePage = Math.min(Math.max(adminPage, 1), totalPages);
+          const startIndex = (safePage - 1) * pageSize;
+          const pageRecords = filtered.slice(startIndex, startIndex + pageSize);
+
+          // Status & Priority Badges
+          const getStatusBadge = (statusStr) => {
+            const s = (statusStr || "").toUpperCase();
+            if (s === "SEALED") return { bg: "rgba(16,185,129,0.15)", text: "#34d399", border: "rgba(16,185,129,0.3)" };
+            if (s === "VERIFIED") return { bg: "rgba(59,130,246,0.15)", text: "#60a5fa", border: "rgba(59,130,246,0.3)" };
+            if (s === "TAMPERED" || s === "FLAGGED" || s === "INVALID") return { bg: "rgba(239,68,68,0.15)", text: "#f87171", border: "rgba(239,68,68,0.3)" };
+            return { bg: "rgba(161,161,170,0.15)", text: "#d4d4d8", border: "rgba(161,161,170,0.3)" };
+          };
+
+          const getPriorityBadge = (prioStr) => {
+            const p = (prioStr || "").toLowerCase();
+            if (p.includes("court")) return { bg: "rgba(239,68,68,0.15)", text: "#f87171", border: "rgba(239,68,68,0.35)" };
+            if (p.includes("urgent")) return { bg: "rgba(245,158,11,0.15)", text: "#fbbf24", border: "rgba(245,158,11,0.35)" };
+            if (p.includes("re-exam")) return { bg: "rgba(168,85,247,0.15)", text: "#c084fc", border: "rgba(168,85,247,0.35)" };
+            if (p.includes("supplementary")) return { bg: "rgba(6,182,212,0.15)", text: "#22d3ee", border: "rgba(6,182,212,0.35)" };
+            return { bg: "rgba(59,130,246,0.15)", text: "#60a5fa", border: "rgba(59,130,246,0.35)" };
+          };
+
+          // Export results as CSV (browser-only, no libraries)
+          const handleExportCSV = () => {
+            if (filtered.length === 0) return;
+            const headers = [
+              "Evidence ID",
+              "Case Number",
+              "Exhibit Number",
+              "Division",
+              "Priority",
+              "Seal Condition",
+              "Source",
+              "Officer Name",
+              "Badge",
+              "Role",
+              "Received By",
+              "Date Logged",
+              "Status",
+              "SHA256 Hash",
+              "Evidence Items"
+            ];
+            const escapeVal = (v) => {
+              if (v === null || v === undefined) return '""';
+              return `"${String(v).replace(/"/g, '""')}"`;
+            };
+            const rows = filtered.map((r) => [
+              escapeVal(r.id),
+              escapeVal(r.caseNo),
+              escapeVal(r.exhibit),
+              escapeVal(r.division),
+              escapeVal(r.priority),
+              escapeVal(r.seal),
+              escapeVal(r.source),
+              escapeVal(r.officerName),
+              escapeVal(r.badge),
+              escapeVal(r.role),
+              escapeVal(r.receivedBy),
+              escapeVal(r.dateStr),
+              escapeVal(r.status),
+              escapeVal(r.hash),
+              escapeVal(r.evidenceText)
+            ]);
+            const csvData = [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
+            const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Forensic_Cases_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          };
+
+          // Download record as JSON (browser-only, no libraries)
+          const handleDownloadRecordJSON = (rec) => {
+            if (!rec) return;
+            const jsonObj = {
+              uuid: rec.id,
+              status: rec.status,
+              hash: rec.hash,
+              createdAt: rec.dateObj ? rec.dateObj.toISOString() : null,
+              case: {
+                no: rec.caseNo,
+                exhibit: rec.exhibit,
+                division: rec.division,
+                priority: rec.priority,
+                seal: rec.seal,
+                source: rec.source
+              },
+              officer: {
+                name: rec.officerName,
+                badge: rec.badge,
+                role: rec.role,
+                receivedBy: rec.receivedBy
+              },
+              evidence: rec.evidenceList,
+              auditHistory: adminHistory.map((h) => ({
+                action: h.action,
+                by: h.by || null,
+                result: h.result || null,
+                time: h.time && h.time.toDate ? h.time.toDate().toISOString() : h.time || null
+              }))
+            };
+            const blob = new Blob([JSON.stringify(jsonObj, null, 2)], { type: "application/json;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Evidence_Record_${rec.caseNo || "Case"}_${rec.exhibit || "Exhibit"}_${rec.id.slice(0, 8)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          };
+
+          // Copy text with feedback
+          const handleCopy = (text, key) => {
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+              setAdminCopyFeedback(key);
+              setTimeout(() => {
+                setAdminCopyFeedback((prev) => (prev === key ? "" : prev));
+              }, 2000);
+            }).catch(() => {});
+          };
+
+          const hasActiveFilters = Boolean(
+            caseSearch.trim() ||
+            adminStatusFilter !== "ALL" ||
+            adminPriorityFilter !== "ALL" ||
+            adminDivisionFilter !== "ALL" ||
+            adminSealFilter !== "ALL" ||
+            adminDateFrom ||
+            adminDateTo
+          );
+
+          const clearAllFilters = () => {
+            setCaseSearch("");
+            setAdminStatusFilter("ALL");
+            setAdminPriorityFilter("ALL");
+            setAdminDivisionFilter("ALL");
+            setAdminSealFilter("ALL");
+            setAdminDateFrom("");
+            setAdminDateTo("");
+            setAdminSortBy("newest");
+            setAdminPage(1);
+          };
+
+          const pickedNormalized = adminPicked ? normalizeItem(adminPicked) : null;
+
+          return (
+            <div style={{ marginTop: 20, maxWidth: 1040, marginLeft: "auto", marginRight: "auto", padding: "0 12px", boxSizing: "border-box" }}>
+              {/* ADMIN LOGIN */}
+              {!adminUser && (
+                <div style={{ maxWidth: 400, margin: "40px auto", padding: 32, borderRadius: 16, background: "#18181b", border: "1px solid #27272a", boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: accent, fontSize: 18 }}>
+                      🛡️
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: 19, color: "#f4f4f5", fontWeight: 700 }}>Admin Login</h3>
+                      <div style={{ fontSize: 12, color: "#a1a1aa" }}>Forensic Evidence Case Dashboard</div>
+                    </div>
                   </div>
+                  <p style={{ margin: "12px 0 20px", fontSize: 13, color: "#a1a1aa", lineHeight: 1.5 }}>
+                    Access to the evidence ledger is restricted. Sign in with administrative credentials to inspect case records.
+                  </p>
+                  <input
+                    type="email"
+                    placeholder="Administrator email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    style={{ width: "100%", padding: "11px 14px", marginBottom: 12, borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14, boxSizing: "border-box", outline: "none" }}
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={adminPass}
+                    onChange={(e) => setAdminPass(e.target.value)}
+                    style={{ width: "100%", padding: "11px 14px", marginBottom: 16, borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14, boxSizing: "border-box", outline: "none" }}
+                  />
+                  {adminError && <div style={{ color: "#fca5a5", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 14 }}>{adminError}</div>}
                   <button
                     onClick={async () => {
-                      await signOut(auth);
-                      await signInAnonymously(auth).catch(() => {});
-                      setAdminList([]);
-                      setAdminPicked(null);
+                      setAdminError("");
+                      try {
+                        await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPass);
+                        setAdminPass("");
+                      } catch {
+                        setAdminError("Login failed. Check email and password.");
+                      }
                     }}
-                    style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid #3f3f46", background: "transparent", color: "#a1a1aa", fontSize: 13, cursor: "pointer" }}
+                    style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: accent, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}
                   >
-                    Logout
+                    Authenticate & Access
                   </button>
                 </div>
+              )}
 
-                {/* SEARCH */}
-                <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-                  <input
-                    type="text"
-                    placeholder="Search by case number"
-                    value={caseSearch}
-                    onChange={(e) => setCaseSearch(e.target.value)}
-                    style={{ flex: 1, minWidth: 200, padding: "10px 12px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14 }}
-                  />
-                  <button
-                    onClick={() => loadAdminList(caseSearch)}
-                    style={{ padding: "10px 22px", borderRadius: 8, border: "none", background: accent, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-                  >
-                    Search
-                  </button>
-                  <button
-                    onClick={() => { setCaseSearch(""); loadAdminList(""); }}
-                    style={{ padding: "10px 18px", borderRadius: 8, border: "1px solid #3f3f46", background: "transparent", color: "#a1a1aa", fontSize: 14, cursor: "pointer" }}
-                  >
-                    Show all
-                  </button>
-                </div>
-
-                {adminError && <div style={{ color: "#fca5a5", fontSize: 13, marginBottom: 12 }}>{adminError}</div>}
-                {adminLoading && <div style={{ color: "#a1a1aa", fontSize: 13, marginBottom: 12 }}>Loading...</div>}
-
-                {/* LIST */}
-                {!adminPicked && (
-                  <div style={{ borderRadius: 14, background: "#18181b", border: "1px solid #27272a", overflow: "hidden" }}>
-                    <div style={{ padding: "12px 16px", borderBottom: "1px solid #27272a", fontSize: 12, color: "#a1a1aa" }}>
-                      {adminList.length} record(s)
-                    </div>
-                    {adminList.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => openAdminRecord(item)}
-                        style={{ padding: "14px 16px", borderBottom: "1px solid #27272a", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}
-                      >
-                        <div>
-                          <div style={{ color: "#f4f4f5", fontSize: 14, fontWeight: 600 }}>
-                            Case {item.case ? item.case.no : item.caseNo} / Exhibit {item.case ? item.case.exhibit : item.exhibitNo}
-                          </div>
-                          <div style={{ color: "#a1a1aa", fontSize: 12, marginTop: 2 }}>
-                            {item.officer ? item.officer.name : item.operator} - {item.createdAt && item.createdAt.toDate ? item.createdAt.toDate().toLocaleString() : ""}
-                          </div>
-                        </div>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: "rgba(16,185,129,0.15)", color: "#34d399" }}>
-                          {item.status}
+              {/* ADMIN LOGGED IN */}
+              {adminUser && (
+                <div>
+                  {/* TOP HEADER BAR */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #27272a" }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 22 }}>📁</span>
+                        <h2 style={{ margin: 0, fontSize: 22, color: "#f4f4f5", fontWeight: 700, letterSpacing: "-0.5px" }}>Case Dashboard</h2>
+                        <span style={{ fontSize: 11, background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "#60a5fa", padding: "2px 8px", borderRadius: 12, fontWeight: 600 }}>
+                          SECURE VAULT
                         </span>
                       </div>
-                    ))}
-                    {!adminLoading && adminList.length === 0 && (
-                      <div style={{ padding: 24, color: "#a1a1aa", fontSize: 13, textAlign: "center" }}>No records found.</div>
-                    )}
+                      <div style={{ fontSize: 12, color: "#a1a1aa", marginTop: 4 }}>
+                        Logged in as <span style={{ color: "#f4f4f5", fontWeight: 500 }}>{adminUser.email}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => loadAdminList()}
+                        disabled={adminLoading}
+                        title="Reload up to 500 records from database"
+                        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #3f3f46", background: "#18181b", color: "#f4f4f5", fontSize: 13, cursor: adminLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                      >
+                        <span style={{ display: "inline-block", transform: adminLoading ? "rotate(180deg)" : "none", transition: "transform 0.5s" }}>🔄</span>
+                        {adminLoading ? "Syncing..." : "Reload"}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await signOut(auth);
+                          await signInAnonymously(auth).catch(() => {});
+                          setAdminList([]);
+                          setAdminPicked(null);
+                        }}
+                        style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: 13, cursor: "pointer", fontWeight: 500 }}
+                      >
+                        Logout
+                      </button>
+                    </div>
                   </div>
-                )}
 
-                {/* ONE RECORD */}
-                {adminPicked && (
-                  <div style={{ borderRadius: 14, background: "#18181b", border: "1px solid #27272a", padding: 22 }}>
-                    <button
-                      onClick={() => setAdminPicked(null)}
-                      style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #3f3f46", background: "transparent", color: "#a1a1aa", fontSize: 12, cursor: "pointer", marginBottom: 16 }}
-                    >
-                      Back to list
-                    </button>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-                      <h3 style={{ margin: 0, fontSize: 18, color: "#f4f4f5", fontWeight: 600 }}>
-                        Case {adminPicked.case ? adminPicked.case.no : adminPicked.caseNo} / Exhibit {adminPicked.case ? adminPicked.case.exhibit : adminPicked.exhibitNo}
-                      </h3>
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: "rgba(16,185,129,0.15)", color: "#34d399" }}>
-                        {adminPicked.status}
-                      </span>
+                  {/* SUMMARY CARDS ROW (D) */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
+                    <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 11, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>Total Records</span>
+                        <span style={{ color: "#3b82f6" }}>📦</span>
+                      </div>
+                      <div style={{ fontSize: 26, fontWeight: 700, color: "#f4f4f5", marginTop: 6 }}>{totalRecords}</div>
+                      <div style={{ fontSize: 11, color: "#71717a", marginTop: 2 }}>Loaded evidence items</div>
                     </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 18 }}>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Officer</div>
-                        <div style={{ fontSize: 14, color: "#f4f4f5" }}>{adminPicked.officer ? adminPicked.officer.name : adminPicked.operator}</div>
-                        <div style={{ fontSize: 12, color: "#a1a1aa" }}>Badge {adminPicked.officer ? adminPicked.officer.badge : adminPicked.badge} - {adminPicked.officer ? adminPicked.officer.role : adminPicked.role}</div>
+                    <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 11, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>Records Today</span>
+                        <span style={{ color: "#10b981" }}>📅</span>
                       </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Received by</div>
-                        <div style={{ fontSize: 14, color: "#f4f4f5" }}>{adminPicked.officer ? adminPicked.officer.receivedBy : adminPicked.receivedBy}</div>
-                        <div style={{ fontSize: 12, color: "#a1a1aa" }}>{adminPicked.case ? adminPicked.case.division : adminPicked.division}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Source</div>
-                        <div style={{ fontSize: 14, color: "#f4f4f5" }}>{adminPicked.case ? adminPicked.case.source : adminPicked.source}</div>
-                        <div style={{ fontSize: 12, color: "#a1a1aa" }}>
-                          Seal {adminPicked.case ? adminPicked.case.seal : adminPicked.seal} - {adminPicked.case ? adminPicked.case.priority : adminPicked.priority}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Date logged</div>
-                        <div style={{ fontSize: 14, color: "#f4f4f5" }}>
-                          {adminPicked.createdAt && adminPicked.createdAt.toDate ? adminPicked.createdAt.toDate().toLocaleString() : ""}
-                        </div>
-                      </div>
+                      <div style={{ fontSize: 26, fontWeight: 700, color: "#34d399", marginTop: 6 }}>{recordsToday}</div>
+                      <div style={{ fontSize: 11, color: "#71717a", marginTop: 2 }}>Intakes logged today</div>
                     </div>
-
-                    <div style={{ background: "#09090b", borderRadius: 10, padding: 14, marginBottom: 18 }}>
-                      <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Evidence</div>
-                      {adminPicked.evidence && adminPicked.evidence.map((e, i) => (
-                        <div key={i} style={{ marginBottom: 10 }}>
-                          <div style={{ fontSize: 13, color: "#f4f4f5", fontWeight: 600 }}>{e.title}</div>
-                          <div style={{ fontSize: 13, color: "#d4d4d8", whiteSpace: "pre-wrap" }}>{e.content}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={{ marginBottom: 18 }}>
-                      <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>SHA-256 hash</div>
-                      <div style={{ fontFamily: "monospace", fontSize: 12, color: "#a1a1aa", background: "#09090b", padding: 10, borderRadius: 8, wordBreak: "break-all", userSelect: "all" }}>
-                        {adminPicked.hash}
+                    <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 11, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>Unique Cases</span>
+                        <span style={{ color: "#f59e0b" }}>📑</span>
                       </div>
-                      <div style={{ fontSize: 11, color: "#52525b", marginTop: 6 }}>Evidence ID: {adminPicked.id}</div>
+                      <div style={{ fontSize: 26, fontWeight: 700, color: "#f4f4f5", marginTop: 6 }}>{totalCases}</div>
+                      <div style={{ fontSize: 11, color: "#71717a", marginTop: 2 }}>Distinct case files</div>
                     </div>
+                    <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 11, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>Officers</span>
+                        <span style={{ color: "#a855f7" }}>👮</span>
+                      </div>
+                      <div style={{ fontSize: 26, fontWeight: 700, color: "#f4f4f5", marginTop: 6 }}>{totalOfficers}</div>
+                      <div style={{ fontSize: 11, color: "#71717a", marginTop: 2 }}>Logged investigators</div>
+                    </div>
+                  </div>
 
+                  {adminError && (
+                    <div style={{ color: "#fca5a5", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, marginBottom: 16 }}>
+                      ⚠️ {adminError}
+                    </div>
+                  )}
+
+                  {/* ===================== LIST VIEW ===================== */}
+                  {!adminPicked && (
                     <div>
-                      <div style={{ fontSize: 10, color: "#71717a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>History</div>
-                      {adminHistory.map((h, i) => (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: "1px solid #27272a", fontSize: 13 }}>
-                          <span style={{ color: "#f4f4f5" }}>{h.action}{h.result ? " - " + h.result : ""}{h.by ? " by " + h.by : ""}</span>
-                          <span style={{ color: "#a1a1aa" }}>{h.time && h.time.toDate ? h.time.toDate().toLocaleString() : ""}</span>
+                      {/* SEARCH AND FILTERS CARD (B) */}
+                      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: "18px 20px", marginBottom: 18 }}>
+                        {/* MAIN SEARCH INPUT */}
+                        <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                          <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
+                            <span style={{ position: "absolute", left: 14, top: 11, color: "#71717a", fontSize: 15 }}>🔍</span>
+                            <input
+                              type="text"
+                              placeholder="Search by case #, exhibit, officer, badge, evidence text, source, or ID..."
+                              value={caseSearch}
+                              onChange={(e) => {
+                                setCaseSearch(e.target.value);
+                                setAdminPage(1);
+                              }}
+                              style={{ width: "100%", padding: "10px 14px 10px 40px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14, boxSizing: "border-box", outline: "none" }}
+                            />
+                            {caseSearch && (
+                              <button
+                                onClick={() => { setCaseSearch(""); setAdminPage(1); }}
+                                style={{ position: "absolute", right: 10, top: 9, background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: 14, padding: 4 }}
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                          <button
+                            onClick={handleExportCSV}
+                            title="Export filtered records as CSV (Zero libraries)"
+                            style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid rgba(59,130,246,0.4)", background: "rgba(59,130,246,0.12)", color: "#60a5fa", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+                          >
+                            <span>📥</span> Export CSV ({filtered.length})
+                          </button>
                         </div>
-                      ))}
-                      {adminHistory.length === 0 && <div style={{ color: "#a1a1aa", fontSize: 13 }}>No history yet.</div>}
+
+                        {/* FILTER DROPDOWNS ROW */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 12 }}>
+                          {/* STATUS */}
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, color: "#a1a1aa", marginBottom: 4, fontWeight: 500 }}>Status</label>
+                            <select
+                              value={adminStatusFilter}
+                              onChange={(e) => { setAdminStatusFilter(e.target.value); setAdminPage(1); }}
+                              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 12, outline: "none" }}
+                            >
+                              <option value="ALL">All Statuses</option>
+                              <option value="SEALED">SEALED</option>
+                              <option value="VERIFIED">VERIFIED</option>
+                              <option value="FLAGGED">FLAGGED</option>
+                              <option value="TAMPERED">TAMPERED</option>
+                            </select>
+                          </div>
+
+                          {/* PRIORITY */}
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, color: "#a1a1aa", marginBottom: 4, fontWeight: 500 }}>Priority</label>
+                            <select
+                              value={adminPriorityFilter}
+                              onChange={(e) => { setAdminPriorityFilter(e.target.value); setAdminPage(1); }}
+                              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 12, outline: "none" }}
+                            >
+                              <option value="ALL">All Priorities</option>
+                              {PRIORITY_LEVELS.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* DIVISION */}
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, color: "#a1a1aa", marginBottom: 4, fontWeight: 500 }}>Division</label>
+                            <select
+                              value={adminDivisionFilter}
+                              onChange={(e) => { setAdminDivisionFilter(e.target.value); setAdminPage(1); }}
+                              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 12, outline: "none" }}
+                            >
+                              <option value="ALL">All Divisions</option>
+                              {FSL_DIVISIONS.map((d) => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* SEAL CONDITION */}
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, color: "#a1a1aa", marginBottom: 4, fontWeight: 500 }}>Seal Condition</label>
+                            <select
+                              value={adminSealFilter}
+                              onChange={(e) => { setAdminSealFilter(e.target.value); setAdminPage(1); }}
+                              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 12, outline: "none" }}
+                            >
+                              <option value="ALL">All Seal Conditions</option>
+                              {SEAL_CONDITIONS.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* DATE FROM */}
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, color: "#a1a1aa", marginBottom: 4, fontWeight: 500 }}>From Date</label>
+                            <input
+                              type="date"
+                              value={adminDateFrom}
+                              onChange={(e) => { setAdminDateFrom(e.target.value); setAdminPage(1); }}
+                              style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                            />
+                          </div>
+
+                          {/* DATE TO */}
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, color: "#a1a1aa", marginBottom: 4, fontWeight: 500 }}>To Date</label>
+                            <input
+                              type="date"
+                              value={adminDateTo}
+                              onChange={(e) => { setAdminDateTo(e.target.value); setAdminPage(1); }}
+                              style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                            />
+                          </div>
+
+                          {/* SORT ORDER */}
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, color: "#a1a1aa", marginBottom: 4, fontWeight: 500 }}>Sort By</label>
+                            <select
+                              value={adminSortBy}
+                              onChange={(e) => setAdminSortBy(e.target.value)}
+                              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 12, outline: "none" }}
+                            >
+                              <option value="newest">Newest First</option>
+                              <option value="oldest">Oldest First</option>
+                              <option value="caseNo">Case Number (A-Z)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* ACTIVE FILTERS CHIPS & LIVE COUNT ROW (C) */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, paddingTop: 10, borderTop: "1px solid #27272a" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 13, color: "#f4f4f5", fontWeight: 600 }}>
+                              Showing {filtered.length} of {allNormalized.length} records
+                            </span>
+                            {hasActiveFilters && (
+                              <button
+                                onClick={clearAllFilters}
+                                style={{ padding: "4px 10px", borderRadius: 14, border: "1px solid #3f3f46", background: "transparent", color: "#a1a1aa", fontSize: 11, cursor: "pointer" }}
+                              >
+                                Clear all
+                              </button>
+                            )}
+                          </div>
+
+                          {/* CHIPS */}
+                          {hasActiveFilters && (
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {caseSearch.trim() && (
+                                <span style={{ fontSize: 11, background: "#27272a", color: "#e4e4e7", padding: "3px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  Search: "{caseSearch}"
+                                  <span onClick={() => { setCaseSearch(""); setAdminPage(1); }} style={{ cursor: "pointer", color: "#a1a1aa", fontWeight: "bold" }}>✕</span>
+                                </span>
+                              )}
+                              {adminStatusFilter !== "ALL" && (
+                                <span style={{ fontSize: 11, background: "#27272a", color: "#e4e4e7", padding: "3px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  Status: {adminStatusFilter}
+                                  <span onClick={() => { setAdminStatusFilter("ALL"); setAdminPage(1); }} style={{ cursor: "pointer", color: "#a1a1aa", fontWeight: "bold" }}>✕</span>
+                                </span>
+                              )}
+                              {adminPriorityFilter !== "ALL" && (
+                                <span style={{ fontSize: 11, background: "#27272a", color: "#e4e4e7", padding: "3px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  Priority: {adminPriorityFilter}
+                                  <span onClick={() => { setAdminPriorityFilter("ALL"); setAdminPage(1); }} style={{ cursor: "pointer", color: "#a1a1aa", fontWeight: "bold" }}>✕</span>
+                                </span>
+                              )}
+                              {adminDivisionFilter !== "ALL" && (
+                                <span style={{ fontSize: 11, background: "#27272a", color: "#e4e4e7", padding: "3px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  Division: {adminDivisionFilter}
+                                  <span onClick={() => { setAdminDivisionFilter("ALL"); setAdminPage(1); }} style={{ cursor: "pointer", color: "#a1a1aa", fontWeight: "bold" }}>✕</span>
+                                </span>
+                              )}
+                              {adminSealFilter !== "ALL" && (
+                                <span style={{ fontSize: 11, background: "#27272a", color: "#e4e4e7", padding: "3px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  Seal: {adminSealFilter}
+                                  <span onClick={() => { setAdminSealFilter("ALL"); setAdminPage(1); }} style={{ cursor: "pointer", color: "#a1a1aa", fontWeight: "bold" }}>✕</span>
+                                </span>
+                              )}
+                              {adminDateFrom && (
+                                <span style={{ fontSize: 11, background: "#27272a", color: "#e4e4e7", padding: "3px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  From: {adminDateFrom}
+                                  <span onClick={() => { setAdminDateFrom(""); setAdminPage(1); }} style={{ cursor: "pointer", color: "#a1a1aa", fontWeight: "bold" }}>✕</span>
+                                </span>
+                              )}
+                              {adminDateTo && (
+                                <span style={{ fontSize: 11, background: "#27272a", color: "#e4e4e7", padding: "3px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  To: {adminDateTo}
+                                  <span onClick={() => { setAdminDateTo(""); setAdminPage(1); }} style={{ cursor: "pointer", color: "#a1a1aa", fontWeight: "bold" }}>✕</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* RECORD LIST (E) */}
+                      {adminLoading && (
+                        <div style={{ padding: 40, textAlign: "center", color: "#a1a1aa", fontSize: 14 }}>
+                          <div style={{ display: "inline-block", fontSize: 24, marginBottom: 8, animation: "spin 1s linear infinite" }}>🔄</div>
+                          <div>Loading database records...</div>
+                        </div>
+                      )}
+
+                      {!adminLoading && filtered.length === 0 && (
+                        <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: 48, textAlign: "center", color: "#a1a1aa" }}>
+                          <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+                          <div style={{ fontSize: 16, color: "#f4f4f5", fontWeight: 600, marginBottom: 6 }}>No matching evidence records found</div>
+                          <div style={{ fontSize: 13, color: "#71717a", maxWidth: 400, margin: "0 auto 16px" }}>
+                            Try adjusting your search criteria, clearing dropdown filters, or broadening the date range.
+                          </div>
+                          {hasActiveFilters && (
+                            <button
+                              onClick={clearAllFilters}
+                              style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid #3f3f46", background: "#27272a", color: "#f4f4f5", fontSize: 13, cursor: "pointer" }}
+                            >
+                              Reset all filters
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* LIST OF RECORD CARDS */}
+                      {!adminLoading && filtered.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {pageRecords.map((item) => {
+                            const statusBadge = getStatusBadge(item.status);
+                            const priorityBadge = getPriorityBadge(item.priority);
+
+                            return (
+                              <div
+                                key={item.id}
+                                onClick={() => openAdminRecord(item.raw)}
+                                style={{
+                                  background: "#18181b",
+                                  border: "1px solid #27272a",
+                                  borderRadius: 12,
+                                  padding: "16px 18px",
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 10
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = "#3b82f6";
+                                  e.currentTarget.style.background = "#1c1c20";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = "#27272a";
+                                  e.currentTarget.style.background = "#18181b";
+                                }}
+                              >
+                                {/* CARD TOP ROW: CASE / EXHIBIT & BADGES */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                    <span style={{ color: "#f4f4f5", fontSize: 15, fontWeight: 700, letterSpacing: "-0.2px" }}>
+                                      Case {item.caseNo ? `#${item.caseNo}` : "Unassigned"}
+                                    </span>
+                                    <span style={{ color: "#71717a", fontSize: 14 }}>/</span>
+                                    <span style={{ color: "#38bdf8", fontSize: 14, fontWeight: 600 }}>
+                                      Exhibit {item.exhibit || "N/A"}
+                                    </span>
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: priorityBadge.bg, color: priorityBadge.text, border: `1px solid ${priorityBadge.border}` }}>
+                                      {item.priority}
+                                    </span>
+                                    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: statusBadge.bg, color: statusBadge.text, border: `1px solid ${statusBadge.border}` }}>
+                                      {item.status}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* CARD MIDDLE ROW: OFFICER, DIVISION, SEAL */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, fontSize: 13 }}>
+                                  <div style={{ color: "#d4d4d8" }}>
+                                    <span style={{ color: "#a1a1aa" }}>Officer:</span> {item.officerName || "Unknown"}
+                                    {item.badge && <span style={{ color: "#71717a", marginLeft: 6 }}>({item.badge})</span>}
+                                    {item.role && <span style={{ color: "#71717a", marginLeft: 6 }}>• {item.role}</span>}
+                                  </div>
+                                  <div style={{ color: "#a1a1aa", fontSize: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                    <span>🏛️ {item.division}</span>
+                                    <span>🔒 Seal: {item.seal}</span>
+                                    {item.evidenceList.length > 0 && <span>📄 {item.evidenceList.length} item(s)</span>}
+                                  </div>
+                                </div>
+
+                                {/* CARD BOTTOM ROW: DATE & ACTION LINK */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px solid #222226", fontSize: 12 }}>
+                                  <div style={{ color: "#71717a", display: "flex", alignItems: "center", gap: 5 }}>
+                                    <span>🕒</span>
+                                    <span>{item.dateStr}</span>
+                                  </div>
+                                  <div style={{ color: "#3b82f6", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                                    <span>View Record</span>
+                                    <span>→</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* PAGINATION CONTROLS (E) */}
+                      {!adminLoading && filtered.length > pageSize && (
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: 20, padding: "14px 18px", background: "#18181b", border: "1px solid #27272a", borderRadius: 12 }}>
+                          <div style={{ fontSize: 13, color: "#a1a1aa" }}>
+                            Showing <span style={{ color: "#f4f4f5", fontWeight: 600 }}>{startIndex + 1}</span>–<span style={{ color: "#f4f4f5", fontWeight: 600 }}>{Math.min(startIndex + pageSize, filtered.length)}</span> of <span style={{ color: "#f4f4f5", fontWeight: 600 }}>{filtered.length}</span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <button
+                              onClick={() => setAdminPage((prev) => Math.max(prev - 1, 1))}
+                              disabled={safePage === 1}
+                              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #3f3f46", background: safePage === 1 ? "#09090b" : "#27272a", color: safePage === 1 ? "#52525b" : "#f4f4f5", fontSize: 12, fontWeight: 500, cursor: safePage === 1 ? "not-allowed" : "pointer" }}
+                            >
+                              ← Previous
+                            </button>
+
+                            <div style={{ fontSize: 12, color: "#a1a1aa", padding: "0 8px" }}>
+                              Page <span style={{ color: "#f4f4f5", fontWeight: 600 }}>{safePage}</span> of <span style={{ color: "#f4f4f5", fontWeight: 600 }}>{totalPages}</span>
+                            </div>
+
+                            <button
+                              onClick={() => setAdminPage((prev) => Math.min(prev + 1, totalPages))}
+                              disabled={safePage === totalPages}
+                              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #3f3f46", background: safePage === totalPages ? "#09090b" : "#27272a", color: safePage === totalPages ? "#52525b" : "#f4f4f5", fontSize: 12, fontWeight: 500, cursor: safePage === totalPages ? "not-allowed" : "pointer" }}
+                            >
+                              Next →
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                  )}
+
+                  {/* ===================== RECORD DETAILS VIEW (F & G) ===================== */}
+                  {adminPicked && pickedNormalized && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {/* TOP ACTION BAR */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: "16px 20px" }}>
+                        <button
+                          onClick={() => setAdminPicked(null)}
+                          style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #3f3f46", background: "#27272a", color: "#f4f4f5", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                        >
+                          ← Back to Case List
+                        </button>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: getPriorityBadge(pickedNormalized.priority).bg, color: getPriorityBadge(pickedNormalized.priority).text, border: `1px solid ${getPriorityBadge(pickedNormalized.priority).border}` }}>
+                            {pickedNormalized.priority}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: getStatusBadge(pickedNormalized.status).bg, color: getStatusBadge(pickedNormalized.status).text, border: `1px solid ${getStatusBadge(pickedNormalized.status).border}` }}>
+                            {pickedNormalized.status}
+                          </span>
+                          <button
+                            onClick={() => handleDownloadRecordJSON(pickedNormalized)}
+                            style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.12)", color: "#34d399", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                          >
+                            <span>💾</span> Download JSON
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* MAIN HEADER TITLE */}
+                      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: "20px 22px" }}>
+                        <div style={{ fontSize: 11, color: "#3b82f6", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 4 }}>
+                          EVIDENCE DOSSIER
+                        </div>
+                        <h2 style={{ margin: "0 0 6px", fontSize: 22, color: "#f4f4f5", fontWeight: 700 }}>
+                          Case #{pickedNormalized.caseNo || "N/A"} • Exhibit {pickedNormalized.exhibit || "N/A"}
+                        </h2>
+                        <div style={{ fontSize: 13, color: "#a1a1aa" }}>
+                          Logged on <span style={{ color: "#f4f4f5" }}>{pickedNormalized.dateStr}</span> • Laboratory Division: <span style={{ color: "#f4f4f5" }}>{pickedNormalized.division}</span>
+                        </div>
+                      </div>
+
+                      {/* CASE INFO GROUP */}
+                      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 12, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>📂</span> Case Information
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Case Number</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.caseNo || "N/A"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Exhibit Identifier</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.exhibit || "N/A"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Forensic Division</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.division}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Priority Level</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.priority}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Seal Condition</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.seal}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Evidence Source</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.source || "Unspecified"}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* OFFICER INFO GROUP */}
+                      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 12, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>👮</span> Officer & Intake Information
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Submitting Officer</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.officerName || "N/A"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Badge ID</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.badge || "N/A"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Official Role</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.role || "N/A"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Received By</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.receivedBy || "N/A"}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* EVIDENCE ITEMS LIST */}
+                      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 12, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>📝</span> Evidence Manifest & Descriptions ({pickedNormalized.evidenceList.length})
+                        </div>
+                        {pickedNormalized.evidenceList.length === 0 ? (
+                          <div style={{ color: "#71717a", fontSize: 13, fontStyle: "italic", padding: "10px 0" }}>No evidence content sections logged.</div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                            {pickedNormalized.evidenceList.map((e, i) => (
+                              <div key={i} style={{ background: "#09090b", borderRadius: 10, border: "1px solid #27272a", padding: 16 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                  <span style={{ fontSize: 10, background: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "2px 8px", borderRadius: 10, fontWeight: 700 }}>
+                                    Item #{i + 1}
+                                  </span>
+                                  <span style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 700 }}>{e.title || `Evidence Item ${i + 1}`}</span>
+                                </div>
+                                <div style={{ fontSize: 13, color: "#d4d4d8", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{e.content}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* CRYPTOGRAPHIC INTEGRITY & HASH */}
+                      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 12, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>🔐</span> Cryptographic Proof & Integrity
+                        </div>
+
+                        {/* SHA-256 HASH */}
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", fontWeight: 600 }}>SHA-256 Digital Signature</div>
+                            <button
+                              onClick={() => handleCopy(pickedNormalized.hash, "hash")}
+                              style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #3f3f46", background: "#27272a", color: adminCopyFeedback === "hash" ? "#34d399" : "#e4e4e7", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+                            >
+                              {adminCopyFeedback === "hash" ? "✓ Copied!" : "📋 Copy Hash"}
+                            </button>
+                          </div>
+                          <div style={{ fontFamily: "monospace", fontSize: 12, color: "#38bdf8", background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a", wordBreak: "break-all", userSelect: "all" }}>
+                            {pickedNormalized.hash || "No cryptographic hash recorded."}
+                          </div>
+                        </div>
+
+                        {/* EVIDENCE ID */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", fontWeight: 600 }}>Evidence Unique UUID</div>
+                            <button
+                              onClick={() => handleCopy(pickedNormalized.id, "uuid")}
+                              style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #3f3f46", background: "#27272a", color: adminCopyFeedback === "uuid" ? "#34d399" : "#e4e4e7", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+                            >
+                              {adminCopyFeedback === "uuid" ? "✓ Copied!" : "📋 Copy ID"}
+                            </button>
+                          </div>
+                          <div style={{ fontFamily: "monospace", fontSize: 12, color: "#a1a1aa", background: "#09090b", padding: "10px 14px", borderRadius: 8, border: "1px solid #27272a", wordBreak: "break-all", userSelect: "all" }}>
+                            {pickedNormalized.id}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* HISTORY TIMELINE */}
+                      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 12, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>⏱️</span> Chain of Custody Audit Trail
+                        </div>
+                        {adminHistory.length === 0 ? (
+                          <div style={{ color: "#71717a", fontSize: 13, fontStyle: "italic" }}>No audit log history events recorded.</div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {adminHistory.map((h, i) => (
+                              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "10px 12px", background: "#09090b", borderRadius: 8, border: "1px solid #222226", fontSize: 13 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6" }} />
+                                  <span style={{ color: "#f4f4f5", fontWeight: 600 }}>{h.action || "Action"}</span>
+                                  {h.result && <span style={{ color: "#a1a1aa" }}>- {h.result}</span>}
+                                  {h.by && <span style={{ color: "#71717a", fontSize: 12 }}>by {h.by}</span>}
+                                </div>
+                                <span style={{ color: "#71717a", fontSize: 12 }}>
+                                  {h.time && h.time.toDate ? h.time.toDate().toLocaleString() : ""}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* INS IGHTS - Apple Style Premium UI */}
         {tab === "insights" && (

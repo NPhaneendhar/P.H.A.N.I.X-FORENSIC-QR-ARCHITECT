@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == "nittalaphaneendhar@gmail.com";
+    }
+
+    function isApprovedOfficer() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == "password"
+        && hasActiveApproval(request.auth.uid, request.auth.token.email);
+    }
+
+    function hasActiveApproval(uid, email) {
+      let approvalPath = /databases/$(database)/documents/authorizedUsers/$(uid);
+      return exists(approvalPath)
+        && get(approvalPath).data.active == true
+        && get(approvalPath).data.email == email;
+    }
+
+    match /authorizedUsers/{uid} {
+      // Admin creates these documents after creating an officer's Auth account.
+      // Document ID must be that user's Firebase Authentication UID.
+      allow get: if isAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /evidence/{id} {
+      allow get: if isAdmin() || isApprovedOfficer();
+      allow list: if isAdmin();
+
+      allow create: if (isAdmin() || isApprovedOfficer())
+        && id.size() == 36
+        && request.resource.data.keys().hasOnly(['uuid','createdByUid','status','hash','ts','createdAt','case','officer','evidence'])
+        && request.resource.data.uuid == id
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.status == "SEALED"
+        && request.resource.data.hash is string
+        && request.resource.data.hash.size() == 64
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.evidence is list
+        && request.resource.data.evidence.size() > 0
+        && request.resource.data.evidence.size() <= 50
+        && request.resource.data.case is map
+        && request.resource.data.officer is map;
+
+      allow update, delete: if false;
+
+      match /history/{historyId} {
+        allow get, list: if isAdmin() || isApprovedOfficer();
+        allow create: if (isAdmin() || isApprovedOfficer())
+          && exists(/databases/$(database)/documents/evidence/$(id))
+          && request.resource.data.keys().hasOnly(['action','by','result','time'])
+          && request.resource.data.action in ['created','verified']
+          && request.resource.data.by == request.auth.token.email
+          && request.resource.data.time == request.time
+          && (request.resource.data.action != 'verified' || request.resource.data.result == 'VERIFIED');
+        allow update, delete: if false;
+      }
+    }
+  }
+}

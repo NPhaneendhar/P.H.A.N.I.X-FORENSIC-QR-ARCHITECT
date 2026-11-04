@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect } from "react";
-import ProfilePopup from "./ProfilePopup";
-
 import { QRCodeCanvas } from "qrcode.react";
 import CryptoJS from "crypto-js";
 import { v4 as uuidv4 } from "uuid";
@@ -8,9 +6,12 @@ import { BrowserMultiFormatReader } from "@zxing/library";
 import jsQR from "jsqr";
 import { jsPDF } from "jspdf";
 import phanixLogo from "./assets/phanix_logo.png";
+import developerPhoto from "./assets/phaneendhar-profile.jpg";
+import devanagariFontUrl from "./assets/NotoSansDevanagari-Regular.ttf?url";
+import teluguFontUrl from "./assets/NotoSansTelugu-Regular.ttf?url";
 import { db, auth } from "./firebase";
-import { doc, setDoc, getDoc, getDocs, addDoc, collection, query, where, orderBy, limit, serverTimestamp } from "firebase/firestore";
-import { signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, getDocs, addDoc, collection, query, orderBy, limit, serverTimestamp, runTransaction } from "firebase/firestore";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 
 /**
  * P.H.A.N.I.X FORENSIC-QR-ARCHITECT
@@ -65,17 +66,77 @@ const PRIORITY_LEVELS = [
   "Supplementary Submission"
 ];
 
+
 const urlPattern = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i;
 const ipUrl = /^(https?:\/\/)?((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(:\d+)?(\/\S*)?$/i;
 
+const REPORT_TEXT = {
+  hi: {
+    "FORENSIC EVIDENCE REPORT": "फोरेंसिक साक्ष्य रिपोर्ट", "FORENSIC ANALYSIS FAILURE REPORT": "फोरेंसिक विश्लेषण विफलता रिपोर्ट",
+    "CASE SUMMARY": "मामले का सारांश", "OFFICER, SOURCE AND CUSTODY": "अधिकारी, स्रोत और अभिरक्षा", "CHAIN OF CUSTODY SNAPSHOT": "अभिरक्षा श्रृंखला सारांश",
+    "CRYPTOGRAPHIC SIGNATURE": "क्रिप्टोग्राफ़िक हस्ताक्षर", "VALIDATION CHECKLIST": "सत्यापन जाँच सूची", "FORENSIC INDICATORS": "फोरेंसिक संकेतक", "EVIDENCE MANIFEST": "साक्ष्य विवरण सूची", "DOCUMENT ADVISORY": "दस्तावेज़ संबंधी सूचना",
+    "CASE NUMBER": "मामला संख्या", "EXHIBIT NUMBER": "प्रदर्श संख्या", "PACKAGE ID": "पैकेज आईडी", "REFERENCE TIME": "संदर्भ समय", "FSL DIVISION": "एफएसएल विभाग", "PRIORITY": "प्राथमिकता", "OPERATOR": "अधिकृत अधिकारी", "BADGE / ROLE": "बैज / भूमिका", "RECEIVED BY": "प्राप्तकर्ता", "SEAL CONDITION": "सील की स्थिति", "EVIDENCE SOURCE": "साक्ष्य का स्रोत", "VILLAGE": "गाँव", "DISTRICT": "ज़िला", "STATE": "राज्य",
+    "Collected": "संग्रह किया", "Source logged": "स्रोत दर्ज किया", "FSL received": "एफएसएल में प्राप्त", "Digital seal": "डिजिटल सील", "Not recorded": "दर्ज नहीं", "No details recorded.": "कोई विवरण दर्ज नहीं है।", "No evidence manifest was embedded in this payload.": "इस पैकेज में साक्ष्य विवरण सूची शामिल नहीं है।",
+    "PASSED": "सफल", "PASS": "सफल", "FAIL": "विफल", "SKIP": "छोड़ा गया", "NONE": "कोई नहीं", "TRUSTED SEAL": "विश्वसनीय सील", "TAMPERED PACKAGE": "परिवर्तित पैकेज", "UNREGISTERED": "अपंजीकृत", "QR CORRUPTED": "क्यूआर पढ़ा नहीं जा सका",
+    "Required Case Fields": "आवश्यक मामला विवरण", "Evidence Manifest": "साक्ष्य विवरण सूची", "Cryptographic Seal": "क्रिप्टोग्राफ़िक सील", "Pattern detection": "पैटर्न पहचान", "Data extraction": "डेटा निष्कर्षण", "Integrity check": "अखंडता जाँच", "PHANIX seal validation": "PHANIX सील सत्यापन",
+    "This two-page certificate is a concise evidentiary summary. Preserve the original QR payload and generated file together for full verification.": "यह प्रमाणपत्र साक्ष्य का संक्षिप्त सारांश है। पूर्ण सत्यापन के लिए मूल क्यूआर डेटा और बनाई गई फ़ाइल को साथ सुरक्षित रखें।",
+    "Generated and sealed by PHANIX Architect. This report records the case metadata, custody path, evidence manifest, and SHA-256 signature at creation time.": "यह रिपोर्ट PHANIX Architect द्वारा बनाई और सील की गई है। इसमें निर्माण के समय का मामला विवरण, अभिरक्षा क्रम, साक्ष्य सूची और SHA-256 हस्ताक्षर दर्ज हैं।",
+    "Report generated from PHANIX package builder": "रिपोर्ट PHANIX पैकेज बिल्डर से बनाई गई", "Case metadata captured": "मामले का विवरण दर्ज किया गया", "Evidence manifest attached": "साक्ष्य सूची संलग्न है", "SHA-256 package signature recorded": "SHA-256 पैकेज हस्ताक्षर दर्ज है",
+    "REPORT LANGUAGE": "रिपोर्ट की भाषा", "Choose the PDF language. Original case notes and identifiers remain unchanged.": "पीडीएफ़ की भाषा चुनें। मूल मामले के नोट और पहचान विवरण अपरिवर्तित रहेंगे।", "Issued": "जारी किया गया", "Page": "पृष्ठ", "of": "में से", "Certificate": "प्रमाणपत्र", "Additional manifest items omitted from this two-page summary:": "इस दो-पृष्ठीय सारांश में छोड़ी गई अतिरिक्त साक्ष्य प्रविष्टियाँ:",
+    "Original case notes and identifiers remain unchanged.": "मामले के मूल नोट और पहचान विवरण अपरिवर्तित रखे गए हैं।", "No high-risk indicators were detected during automated analysis.": "स्वचालित विश्लेषण में उच्च जोखिम के संकेत नहीं मिले।", "PHANIX Secure Package": "PHANIX सुरक्षित पैकेज", "Evidence Item": "साक्ष्य प्रविष्टि",
+    "Generic Data / Plaintext": "सामान्य डेटा / सादा पाठ", "Unregistered PHANIX ID": "अपंजीकृत PHANIX आईडी", "URL / Web Resource": "URL / वेब संसाधन", "External / Untrusted Data": "बाहरी / अविश्वसनीय डेटा", "UNVERIFIED DATA": "असत्यापित डेटा", "AUTHENTICATION FAILED": "प्रमाणीकरण विफल", "LOCAL CHECK ONLY": "केवल स्थानीय जाँच", "FORMAT VALIDATED": "प्रारूप सत्यापित", "HIGH RISK SOURCE": "उच्च जोखिम स्रोत", "Structural Analysis": "संरचनात्मक विश्लेषण", "Internal Hash Check": "आंतरिक हैश जाँच", "Authenticity Seal": "प्रामाणिकता सील", "SHA-256 mismatch detected": "SHA-256 मेल नहीं मिला", "Evidence data altered after sealing": "सील के बाद साक्ष्य डेटा बदला गया", "Do not trust this record": "इस रिकॉर्ड पर भरोसा न करें", "Evidence ID not found in database": "डेटाबेस में साक्ष्य आईडी नहीं मिली", "Older QR or forged QR": "पुराना या जाली QR", "Hash matches the printed data only": "हैश केवल मुद्रित डेटा से मेल खाता है", "Evidence ID found in database": "डेटाबेस में साक्ष्य आईडी मिली", "SHA-256 recalculated and matched": "SHA-256 की पुनर्गणना कर मिलान किया गया", "Chain of custody intact": "अभिरक्षा श्रृंखला अक्षुण्ण है", "Possible forged QR": "संभावित जाली QR", "Recognized URL structure detected. Source external and unverified.": "पहचाना गया URL प्रारूप मिला। स्रोत बाहरी और असत्यापित है।", "IP-based URL detected. Frequently used in malicious C2 or phishing.": "IP-आधारित URL मिला। इसका उपयोग दुर्भावनापूर्ण C2 या फ़िशिंग में हो सकता है।", "IP-based URL detected (potential phishing or C2 link)": "IP-आधारित URL मिला (संभावित फ़िशिंग या C2 लिंक)", "Non-Phanix signature detected": "गैर-PHANIX हस्ताक्षर मिला", "External data source": "बाहरी डेटा स्रोत", "Integrity check failed": "अखंडता जाँच विफल", "Report ID": "रिपोर्ट आईडी", "Evidence source": "साक्ष्य स्रोत", "Intake timestamp": "प्राप्ति समय",
+    "Data originates from an external source without a PHANIX digital seal.": "डेटा PHANIX डिजिटल सील के बिना बाहरी स्रोत से आया है।", "The data does not match its SHA-256 hash or the hash stored in the evidence database. This record was modified.": "डेटा का SHA-256 हैश या साक्ष्य डेटाबेस में रखा हैश मेल नहीं खाता। इस रिकॉर्ड में बदलाव हुआ है।", "The hash matches the data, but this Evidence ID is not in the database. A forged QR could look the same.": "हैश डेटा से मेल खाता है, लेकिन यह साक्ष्य आईडी डेटाबेस में नहीं है। जाली QR भी ऐसा दिख सकता है।", "Digitally signed and sealed by PHANIX Architect. Hash matches the database record.": "PHANIX Architect द्वारा डिजिटल हस्ताक्षर और सील किया गया। हैश डेटाबेस रिकॉर्ड से मेल खाता है।", "This Evidence ID does not exist in the PHANIX database. The QR is fake or the record was never saved.": "यह साक्ष्य आईडी PHANIX डेटाबेस में मौजूद नहीं है। QR जाली हो सकता है या रिकॉर्ड कभी सहेजा नहीं गया।", "The scanned QR does not match the PHANIX forensic architecture. No cryptographic trust can be established.": "स्कैन किया गया QR PHANIX फोरेंसिक संरचना से मेल नहीं खाता। क्रिप्टोग्राफ़िक विश्वास स्थापित नहीं किया जा सकता।",
+    "QR analysis could not be completed": "क्यूआर विश्लेषण पूरा नहीं हो सका", "The submitted QR pattern was unreadable, incomplete, malformed, or visually degraded. No cryptographic trust decision can be made from this intake.": "दिया गया क्यूआर पैटर्न पढ़ने योग्य नहीं था, अधूरा था, गलत संरचना में था या दृश्य रूप से क्षतिग्रस्त था। इस सामग्री के आधार पर क्रिप्टोग्राफ़िक विश्वसनीयता तय नहीं की जा सकती।",
+    "INTAKE SUMMARY": "प्राप्ति सारांश", "FAILURE STATUS": "विफलता की स्थिति", "CASE HANDLING NOTE": "मामला प्रबंधन टिप्पणी", "TECHNICAL OBSERVATION": "तकनीकी अवलोकन", "RECOMMENDED NEXT ACTIONS": "अनुशंसित अगले कदम", "EVIDENTIARY LIMITATION": "साक्ष्य संबंधी सीमा", "FORENSIC ADVISORY": "फोरेंसिक सूचना",
+    "Attach this failure report to the incident file only as documentation of non-extractable QR evidence. It does not certify authenticity, origin, or payload integrity.": "इस विफलता रिपोर्ट को केवल न पढ़े जा सकने वाले क्यूआर साक्ष्य के दस्तावेज़ीकरण के रूप में घटना फ़ाइल में संलग्न करें। यह प्रामाणिकता, स्रोत या डेटा अखंडता प्रमाणित नहीं करती।",
+    "The analysis pipeline attempted QR pattern discovery and data extraction. The evidence did not provide a readable payload suitable for SHA-256 comparison or PHANIX package reconstruction.": "विश्लेषण प्रक्रिया ने क्यूआर पैटर्न पहचानने और डेटा निकालने का प्रयास किया। साक्ष्य से ऐसा पठनीय डेटा नहीं मिला जिसकी SHA-256 तुलना या PHANIX पैकेज पुनर्निर्माण किया जा सके।",
+    "Capture a sharper image under even lighting.": "समान रोशनी में अधिक स्पष्ट छवि लें।", "Avoid glare, heavy cropping, rotation, and compression.": "चमक, अधिक क्रॉपिंग, घुमाव और संपीड़न से बचें।", "Preserve the original media file before further handling.": "आगे की प्रक्रिया से पहले मूल मीडिया फ़ाइल सुरक्षित रखें।", "If physical evidence is damaged, document condition with photographs.": "यदि भौतिक साक्ष्य क्षतिग्रस्त है, तो उसकी स्थिति की तस्वीरें लें।", "Rescan the source after stabilizing the image or camera feed.": "छवि या कैमरा फ़ीड स्थिर होने के बाद स्रोत को फिर से स्कैन करें।",
+    "This document is a failure certificate, not a verification certificate. It confirms that the QR could not be decoded by the application at intake time. Treat any later manual reconstruction as a separate examination event.": "यह विफलता प्रमाणपत्र है, सत्यापन प्रमाणपत्र नहीं। यह दर्ज करता है कि प्राप्ति के समय ऐप क्यूआर को डिकोड नहीं कर सका। बाद में किया गया कोई भी मैन्युअल पुनर्निर्माण अलग परीक्षा घटना माना जाए।",
+    "Keep this two-page failure report with the original intake material and retry validation only from preserved source media.": "इस दो-पृष्ठीय विफलता रिपोर्ट को मूल प्राप्ति सामग्री के साथ रखें और सत्यापन का पुनः प्रयास केवल सुरक्षित मूल मीडिया से करें।",
+  },
+  te: {
+    "FORENSIC EVIDENCE REPORT": "ఫోరెన్సిక్ సాక్ష్య నివేదిక", "FORENSIC ANALYSIS FAILURE REPORT": "ఫోరెన్సిక్ విశ్లేషణ వైఫల్య నివేదిక",
+    "CASE SUMMARY": "కేసు సారాంశం", "OFFICER, SOURCE AND CUSTODY": "అధికారి, మూలం మరియు సంరక్షణ బాధ్యత", "CHAIN OF CUSTODY SNAPSHOT": "సాక్ష్య సంరక్షణ క్రమం",
+    "CRYPTOGRAPHIC SIGNATURE": "క్రిప్టోగ్రాఫిక్ సంతకం", "VALIDATION CHECKLIST": "ధృవీకరణ తనిఖీ జాబితా", "FORENSIC INDICATORS": "ఫోరెన్సిక్ సూచనలు", "EVIDENCE MANIFEST": "సాక్ష్యాల వివరాల జాబితా", "DOCUMENT ADVISORY": "పత్ర సూచన",
+    "CASE NUMBER": "కేసు సంఖ్య", "EXHIBIT NUMBER": "సాక్ష్య వస్తువు సంఖ్య", "PACKAGE ID": "ప్యాకేజీ ఐడి", "REFERENCE TIME": "సూచన సమయం", "FSL DIVISION": "ఎఫ్‌ఎస్‌ఎల్ విభాగం", "PRIORITY": "ప్రాధాన్యత", "OPERATOR": "అధీకృత అధికారి", "BADGE / ROLE": "బ్యాడ్జ్ / పాత్ర", "RECEIVED BY": "స్వీకరించిన అధికారి", "SEAL CONDITION": "సీల్ స్థితి", "EVIDENCE SOURCE": "సాక్ష్యం మూలం", "VILLAGE": "గ్రామం", "DISTRICT": "జిల్లా", "STATE": "రాష్ట్రం",
+    "Collected": "సేకరించినది", "Source logged": "మూలం నమోదు", "FSL received": "ఎఫ్‌ఎస్‌ఎల్‌లో స్వీకరణ", "Digital seal": "డిజిటల్ సీల్", "Not recorded": "నమోదు చేయలేదు", "No details recorded.": "వివరాలు నమోదు చేయలేదు.", "No evidence manifest was embedded in this payload.": "ఈ ప్యాకేజీలో సాక్ష్యాల వివరాల జాబితా లేదు.",
+    "PASSED": "విజయవంతం", "PASS": "విజయవంతం", "FAIL": "విఫలమైంది", "SKIP": "దాటవేయబడింది", "NONE": "ఏదీ లేదు", "TRUSTED SEAL": "విశ్వసనీయ సీల్", "TAMPERED PACKAGE": "మార్చబడిన ప్యాకేజీ", "UNREGISTERED": "నమోదు కానిది", "QR CORRUPTED": "క్యూఆర్ చదవలేకపోయాం",
+    "Required Case Fields": "అవసరమైన కేసు వివరాలు", "Evidence Manifest": "సాక్ష్యాల వివరాల జాబితా", "Cryptographic Seal": "క్రిప్టోగ్రాఫిక్ సీల్", "Pattern detection": "నమూనా గుర్తింపు", "Data extraction": "డేటా వెలికితీత", "Integrity check": "సమగ్రత తనిఖీ", "PHANIX seal validation": "PHANIX సీల్ ధృవీకరణ",
+    "This two-page certificate is a concise evidentiary summary. Preserve the original QR payload and generated file together for full verification.": "ఈ రెండు పేజీల ధృవీకరణ పత్రం సాక్ష్యాల సంక్షిప్త సారాంశం. పూర్తి ధృవీకరణ కోసం అసలు QR డేటా మరియు రూపొందించిన ఫైల్‌ను కలిపి భద్రపరచండి.",
+    "Generated and sealed by PHANIX Architect. This report records the case metadata, custody path, evidence manifest, and SHA-256 signature at creation time.": "ఈ నివేదిక PHANIX Architect ద్వారా రూపొందించి సీల్ చేయబడింది. రూపొందించిన సమయంలోని కేసు వివరాలు, సంరక్షణ క్రమం, సాక్ష్యాల జాబితా మరియు SHA-256 సంతకం ఇందులో నమోదు చేయబడ్డాయి.",
+    "Report generated from PHANIX package builder": "PHANIX ప్యాకేజీ బిల్డర్ ద్వారా రూపొందించిన నివేదిక", "Case metadata captured": "కేసు వివరాలు నమోదు చేయబడ్డాయి", "Evidence manifest attached": "సాక్ష్యాల జాబితా జతచేయబడింది", "SHA-256 package signature recorded": "SHA-256 ప్యాకేజీ సంతకం నమోదు చేయబడింది",
+    "REPORT LANGUAGE": "నివేదిక భాష", "Choose the PDF language. Original case notes and identifiers remain unchanged.": "PDF భాషను ఎంచుకోండి. అసలు కేసు గమనికలు, గుర్తింపు వివరాలు మారవు.", "Issued": "జారీ చేసిన సమయం", "Page": "పేజీ", "of": "లో", "Certificate": "ధృవీకరణ పత్రం", "Additional manifest items omitted from this two-page summary:": "ఈ రెండు పేజీల సారాంశంలో చేర్చని అదనపు సాక్ష్య అంశాలు:",
+    "Original case notes and identifiers remain unchanged.": "అసలు కేసు గమనికలు, గుర్తింపు వివరాలు యథాతథంగా ఉంచబడ్డాయి.", "No high-risk indicators were detected during automated analysis.": "స్వయంచాలక విశ్లేషణలో అధిక ప్రమాద సూచనలు గుర్తించబడలేదు.", "PHANIX Secure Package": "PHANIX సురక్షిత ప్యాకేజీ", "Evidence Item": "సాక్ష్య అంశం",
+    "Generic Data / Plaintext": "సాధారణ డేటా / సాదా పాఠ్యం", "Unregistered PHANIX ID": "నమోదుకాని PHANIX ID", "URL / Web Resource": "URL / వెబ్ వనరు", "External / Untrusted Data": "బాహ్య / అవిశ్వసనీయ డేటా", "UNVERIFIED DATA": "ధృవీకరించని డేటా", "AUTHENTICATION FAILED": "ప్రామాణీకరణ విఫలమైంది", "LOCAL CHECK ONLY": "స్థానిక తనిఖీ మాత్రమే", "FORMAT VALIDATED": "ఫార్మాట్ ధృవీకరించబడింది", "HIGH RISK SOURCE": "అధిక ప్రమాద మూలం", "Structural Analysis": "నిర్మాణ విశ్లేషణ", "Internal Hash Check": "అంతర్గత హాష్ తనిఖీ", "Authenticity Seal": "ప్రామాణికత సీల్", "SHA-256 mismatch detected": "SHA-256 సరిపోలలేదు", "Evidence data altered after sealing": "సీల్ చేసిన తర్వాత సాక్ష్య డేటా మార్చబడింది", "Do not trust this record": "ఈ రికార్డును నమ్మవద్దు", "Evidence ID not found in database": "డేటాబేస్‌లో సాక్ష్య ID కనబడలేదు", "Older QR or forged QR": "పాత లేదా నకిలీ QR", "Hash matches the printed data only": "హాష్ ముద్రించిన డేటాతో మాత్రమే సరిపోలింది", "Evidence ID found in database": "డేటాబేస్‌లో సాక్ష్య ID కనబడింది", "SHA-256 recalculated and matched": "SHA-256 మళ్లీ లెక్కించి సరిపోల్చబడింది", "Chain of custody intact": "సాక్ష్య సంరక్షణ క్రమం యథాతథంగా ఉంది", "Possible forged QR": "నకిలీ QR అయ్యే అవకాశం ఉంది", "Recognized URL structure detected. Source external and unverified.": "గుర్తించిన URL నిర్మాణం ఉంది. మూలం బాహ్యమైనది, ధృవీకరించబడలేదు.", "IP-based URL detected. Frequently used in malicious C2 or phishing.": "IP ఆధారిత URL గుర్తించబడింది. హానికర C2 లేదా ఫిషింగ్‌లో తరచుగా ఉపయోగిస్తారు.", "IP-based URL detected (potential phishing or C2 link)": "IP ఆధారిత URL గుర్తించబడింది (ఫిషింగ్ లేదా C2 లింక్ అయ్యే అవకాశం)", "Non-Phanix signature detected": "PHANIX కాని సంతకం గుర్తించబడింది", "External data source": "బాహ్య డేటా మూలం", "Integrity check failed": "సమగ్రత తనిఖీ విఫలమైంది", "Report ID": "నివేదిక ID", "Evidence source": "సాక్ష్య మూలం", "Intake timestamp": "స్వీకరణ సమయం",
+    "Data originates from an external source without a PHANIX digital seal.": "PHANIX డిజిటల్ సీల్ లేని బాహ్య మూలం నుంచి డేటా వచ్చింది.", "The data does not match its SHA-256 hash or the hash stored in the evidence database. This record was modified.": "డేటా యొక్క SHA-256 హాష్ లేదా సాక్ష్య డేటాబేస్‌లోని హాష్ సరిపోలలేదు. ఈ రికార్డు మార్చబడింది.", "The hash matches the data, but this Evidence ID is not in the database. A forged QR could look the same.": "హాష్ డేటాతో సరిపోలింది, కానీ ఈ సాక్ష్య ID డేటాబేస్‌లో లేదు. నకిలీ QR కూడా ఇలాగే కనిపించవచ్చు.", "Digitally signed and sealed by PHANIX Architect. Hash matches the database record.": "PHANIX Architect డిజిటల్ సంతకం చేసి సీల్ చేసింది. హాష్ డేటాబేస్ రికార్డుతో సరిపోలింది.", "This Evidence ID does not exist in the PHANIX database. The QR is fake or the record was never saved.": "ఈ సాక్ష్య ID PHANIX డేటాబేస్‌లో లేదు. QR నకిలీ కావచ్చు లేదా రికార్డు ఎప్పుడూ భద్రపరచబడలేదు.", "The scanned QR does not match the PHANIX forensic architecture. No cryptographic trust can be established.": "స్కాన్ చేసిన QR, PHANIX ఫోరెన్సిక్ నిర్మాణంతో సరిపోలలేదు. క్రిప్టోగ్రాఫిక్ విశ్వసనీయతను స్థాపించలేం.",
+    "QR analysis could not be completed": "QR విశ్లేషణ పూర్తి కాలేదు", "The submitted QR pattern was unreadable, incomplete, malformed, or visually degraded. No cryptographic trust decision can be made from this intake.": "సమర్పించిన QR నమూనా చదవలేనిది, అసంపూర్ణమైనది, తప్పుగా రూపొందినది లేదా దృశ్యపరంగా దెబ్బతిన్నది. ఈ స్వీకరణ ఆధారంగా క్రిప్టోగ్రాఫిక్ విశ్వసనీయతను నిర్ణయించలేం.",
+    "INTAKE SUMMARY": "స్వీకరణ సారాంశం", "FAILURE STATUS": "వైఫల్య స్థితి", "CASE HANDLING NOTE": "కేసు నిర్వహణ గమనిక", "TECHNICAL OBSERVATION": "సాంకేతిక పరిశీలన", "RECOMMENDED NEXT ACTIONS": "సిఫార్సు చేసిన తదుపరి చర్యలు", "EVIDENTIARY LIMITATION": "సాక్ష్య పరిమితి", "FORENSIC ADVISORY": "ఫోరెన్సిక్ సూచన",
+    "Attach this failure report to the incident file only as documentation of non-extractable QR evidence. It does not certify authenticity, origin, or payload integrity.": "ఈ వైఫల్య నివేదికను చదవలేని QR సాక్ష్యానికి సంబంధించిన పత్రంగా మాత్రమే ఘటన ఫైల్‌కు జతచేయండి. ఇది ప్రామాణికత, మూలం లేదా డేటా సమగ్రతను ధృవీకరించదు.",
+    "The analysis pipeline attempted QR pattern discovery and data extraction. The evidence did not provide a readable payload suitable for SHA-256 comparison or PHANIX package reconstruction.": "విశ్లేషణ ప్రక్రియ QR నమూనాను గుర్తించి డేటాను వెలికితీయడానికి ప్రయత్నించింది. SHA-256 పోలిక లేదా PHANIX ప్యాకేజీ పునర్నిర్మాణానికి సరిపడే చదవగల డేటా లభించలేదు.",
+    "Capture a sharper image under even lighting.": "సమానమైన వెలుతురులో స్పష్టమైన చిత్రాన్ని తీయండి.", "Avoid glare, heavy cropping, rotation, and compression.": "కాంతి ప్రతిబింబం, అధిక క్రాపింగ్, తిప్పడం మరియు కంప్రెషన్‌ను నివారించండి.", "Preserve the original media file before further handling.": "తదుపరి చర్యలకు ముందు అసలు మీడియా ఫైల్‌ను భద్రపరచండి.", "If physical evidence is damaged, document condition with photographs.": "భౌతిక సాక్ష్యం దెబ్బతిన్నట్లయితే, దాని స్థితిని ఫోటోలతో నమోదు చేయండి.", "Rescan the source after stabilizing the image or camera feed.": "చిత్రం లేదా కెమెరా ఫీడ్ స్థిరమైన తర్వాత మూలాన్ని మళ్లీ స్కాన్ చేయండి.",
+    "This document is a failure certificate, not a verification certificate. It confirms that the QR could not be decoded by the application at intake time. Treat any later manual reconstruction as a separate examination event.": "ఇది వైఫల్య ధృవీకరణ పత్రమే కానీ ధృవీకరణ నివేదిక కాదు. స్వీకరణ సమయంలో అప్లికేషన్ QR ను డీకోడ్ చేయలేకపోయిందని మాత్రమే ఇది నమోదు చేస్తుంది. తరువాత చేసే మాన్యువల్ పునర్నిర్మాణాన్ని వేరే పరీక్షా సంఘటనగా పరిగణించాలి.",
+    "Keep this two-page failure report with the original intake material and retry validation only from preserved source media.": "ఈ రెండు పేజీల వైఫల్య నివేదికను అసలు స్వీకరణ సామగ్రితో ఉంచండి. భద్రపరిచిన మూల మీడియా నుంచే మళ్లీ ధృవీకరణ ప్రయత్నించండి.",
+  },
+};
+
+const escapeReportHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+
 export default function ForensicQRGenerator() {
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isDeveloperInfoOpen, setIsDeveloperInfoOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [tab, setTab] = useState("generator");
+  const [reportLanguage, setReportLanguage] = useState("en");
 
   // ADMIN DASHBOARD (only the admin email can read the full list, enforced by Firestore rules)
   const [adminUser, setAdminUser] = useState(null);
+  const [signedInUser, setSignedInUser] = useState(null);
+  const [approvedOfficer, setApprovedOfficer] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPass, setAdminPass] = useState("");
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [adminError, setAdminError] = useState("");
   const [caseSearch, setCaseSearch] = useState("");
   const [adminList, setAdminList] = useState([]);
@@ -96,6 +157,9 @@ export default function ForensicQRGenerator() {
   const [role, setRole] = useState("");
   const [caseNumber, setCaseNumber] = useState("");
   const [exhibitNumber, setExhibitNumber] = useState("");
+  const [village, setVillage] = useState("");
+  const [district, setDistrict] = useState("");
+  const [regionState, setRegionState] = useState("");
   const [labDivision, setLabDivision] = useState("Digital Forensics");
   const [receivingOfficer, setReceivingOfficer] = useState("");
   const [sealCondition, setSealCondition] = useState("Intact");
@@ -112,6 +176,11 @@ export default function ForensicQRGenerator() {
   const [status, setStatus] = useState("");
   const [qrData, setQrData] = useState("");
   const [manifest, setManifest] = useState(null);
+  const [qrDownloaded, setQrDownloaded] = useState(false);
+  const [reportExportStarted, setReportExportStarted] = useState(false);
+  const [showSaveReminder, setShowSaveReminder] = useState(false);
+  const [showGeneratedNotice, setShowGeneratedNotice] = useState(false);
+  const [pendingSaveAction, setPendingSaveAction] = useState(null);
   const [demoHash, setDemoHash] = useState("");
   const [viewerData, setViewerData] = useState(null);
   const [verifyStatus, setVerifyStatus] = useState("idle");
@@ -119,20 +188,97 @@ export default function ForensicQRGenerator() {
   const [scanInput, setScanInput] = useState("");
   const [scanResult, setScanResult] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const [videoDevices, setVideoDevices] = useState([]);
   const [selectedDeviceIndex, setSelectedDeviceIndex] = useState(0);
   const [hasDefaultedCamera, setHasDefaultedCamera] = useState(false);
+
+  useEffect(() => {
+    if (!manifest || (qrDownloaded && reportExportStarted)) return undefined;
+    const warnBeforeLeaving = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [manifest, qrDownloaded, reportExportStarted]);
+
+  useEffect(() => {
+    if (!manifest) {
+      setShowGeneratedNotice(false);
+      return undefined;
+    }
+
+    setShowGeneratedNotice(true);
+    const timeoutId = window.setTimeout(() => setShowGeneratedNotice(false), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [manifest]);
 
   /**
    * INTERACTIVE BRANDING LOGIC
    * Managing refs and states for cross-component highlighting.
    */
   const aboutIconRef = useRef(null);
-  const [isIconPulsing, setIsIconPulsing] = useState(false);
+  const aboutMenuRef = useRef(null);
+  const developerMenuRef = useRef(null);
+  const accountMenuRef = useRef(null);
 
-  const triggerIconPulse = () => {
-    setIsIconPulsing(true);
-    setTimeout(() => setIsIconPulsing(false), 2000);
+  useEffect(() => {
+    if (!isAboutOpen) return undefined;
+
+    const closeOnOutsidePointer = (event) => {
+      if (!aboutMenuRef.current?.contains(event.target)) setIsAboutOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setIsAboutOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isAboutOpen]);
+
+  useEffect(() => {
+    if (!isDeveloperInfoOpen) return undefined;
+
+    const closeOnOutsidePointer = (event) => {
+      if (!developerMenuRef.current?.contains(event.target)) setIsDeveloperInfoOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setIsDeveloperInfoOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isDeveloperInfoOpen]);
+
+  useEffect(() => {
+    if (!isAccountMenuOpen) return undefined;
+
+    const closeOnOutsidePointer = (event) => {
+      if (!accountMenuRef.current?.contains(event.target)) setIsAccountMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setIsAccountMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isAccountMenuOpen]);
+
+  const openAboutMenu = () => {
+    setIsAboutOpen(true);
     
     // Smooth scroll if needed, though usually in view
     aboutIconRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -166,17 +312,70 @@ export default function ForensicQRGenerator() {
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
   };
 
-  // DATABASE LOGIN: silent sign-in so Firestore rules (request.auth != null) allow access
+  // Only approved password accounts and the admin may read or write evidence.
   useEffect(() => {
-    signInAnonymously(auth).catch((e) => console.error("Firebase sign-in failed", e));
-  }, []);
+    let active = true;
+    const stop = onAuthStateChanged(auth, async (user) => {
+      if (user?.isAnonymous) {
+        if (active) {
+          setSignedInUser(null);
+          setAdminUser(null);
+          setApprovedOfficer(false);
+          setTab("generator");
+          setAuthReady(true);
+        }
+        await signOut(auth).catch(() => {});
+        return;
+      }
 
-  // ADMIN: know who is logged in (anonymous visitors have no email)
-  useEffect(() => {
-    const stop = onAuthStateChanged(auth, (user) => {
-      setAdminUser(user && user.email ? user : null);
+      if (!active) return;
+      setAuthReady(false);
+      setSignedInUser(user || null);
+      const isAdmin = user?.email?.toLowerCase() === "nittalaphaneendhar@gmail.com";
+      setAdminUser(isAdmin ? user : null);
+      setApprovedOfficer(false);
+
+      if (!user) {
+        setTab("generator");
+        setAdminEmail("");
+        setAdminPass("");
+        setShowSignInPassword(false);
+        setAdminError("");
+        setAuthReady(true);
+        return;
+      }
+
+      if (isAdmin) {
+        setTab("admin");
+        setApprovedOfficer(true);
+        setAdminError("");
+        setAuthReady(true);
+        return;
+      }
+
+      setTab("generator");
+      try {
+        const approval = await getDoc(doc(db, "authorizedUsers", user.uid));
+        const approved = approval.exists()
+          && approval.data().active === true
+          && approval.data().email?.toLowerCase() === user.email?.toLowerCase();
+        if (active) {
+          setApprovedOfficer(approved);
+          setAdminError(approved ? "" : "This account is not approved yet. Contact the site owner.");
+          setAuthReady(true);
+        }
+      } catch {
+        if (active) {
+          setApprovedOfficer(false);
+          setAdminError("Could not check account access. Firestore rules may need to be published.");
+          setAuthReady(true);
+        }
+      }
     });
-    return () => stop();
+    return () => {
+      active = false;
+      stop();
+    };
   }, []);
 
   // ADMIN: load up to 500 records once (all searching and filtering is done client-side)
@@ -188,7 +387,7 @@ export default function ForensicQRGenerator() {
       let snap;
       try {
         snap = await getDocs(query(collection(db, "evidence"), orderBy("createdAt", "desc"), limit(500)));
-      } catch (err) {
+      } catch {
         snap = await getDocs(query(collection(db, "evidence"), limit(500)));
       }
       setAdminList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -243,17 +442,19 @@ export default function ForensicQRGenerator() {
   }, []);
 
   useEffect(() => {
-    if (!isCameraActive) return;
+    if (!isCameraActive || tab !== "scanner") return;
 
     /**
      * CAMERA INITIALIZATION PIPELINE
      * Enumerate devices and initialize the selected stream.
      */
     let controls;
+    let cancelled = false;
     
     const startScanner = async () => {
       try {
         const devices = await codeReaderRef.current.listVideoInputDevices();
+        if (cancelled) return;
         setVideoDevices(devices);
         
         if (devices.length === 0) {
@@ -283,33 +484,50 @@ export default function ForensicQRGenerator() {
         controls = await codeReaderRef.current.decodeFromVideoDevice(
           deviceId,
           videoRef.current,
-          (result, err) => {
+          (result) => {
             if (result) {
               const text = result.getText();
               setScanInput(text);
               processScan(text);
               setIsCameraActive(false);
+              setCameraError("");
               playBeep();
             }
           }
         );
+        if (cancelled) {
+          controls?.stop();
+          codeReaderRef.current.reset();
+        }
       } catch (err) {
+        if (cancelled) return;
         console.error("[FORENSIC_ERROR] Camera initialization failed.", err);
         setIsCameraActive(false);
-        setValidationError(err.message || "Camera access denied or unavailable.");
+        setCameraError(err.message || "Camera access denied or unavailable.");
       }
     };
 
     startScanner();
 
     return () => {
-      if (controls) controls.stop();
+      cancelled = true;
+      controls?.stop();
+      codeReaderRef.current.reset();
     };
-  }, [isCameraActive, selectedDeviceIndex]);
+  }, [isCameraActive, selectedDeviceIndex, tab]);
 
   const generatePackage = async () => {
+    if (!authReady) {
+      setValidationError("Checking account access. Please try again in a moment.");
+      return;
+    }
+    if (!approvedOfficer && !adminUser) {
+      setValidationError(signedInUser ? "This account is not approved to create evidence records." : "Sign in with an approved account before creating an evidence record.");
+      if (!signedInUser) setIsAdminLoginOpen(true);
+      return;
+    }
     if (!name.trim() || !badge.trim() || !role.trim() || !caseNumber.trim() || !exhibitNumber.trim() || !evidenceSource.trim()) {
-      setValidationError("Please fill in all required fields (Name, Badge ID, Role, Case Number, Exhibit Number, Evidence Source).");
+      setValidationError("Please fill in all required fields.");
       return;
     }
     setValidationError("");
@@ -358,6 +576,10 @@ export default function ForensicQRGenerator() {
       seal: sealCondition.trim(),
       priority: priorityLevel.trim(),
       src: finalEvidenceSource.trim(),
+      reportLanguage,
+      village: village.trim(),
+      district: district.trim(),
+      state: regionState.trim(),
       uid: id,
       ts: timestamp,
       sec: canonicalSections,
@@ -368,8 +590,10 @@ export default function ForensicQRGenerator() {
 
     // SAVE EVIDENCE RECORD TO DATABASE (write-once, rules block edit/delete)
     try {
-      await setDoc(doc(db, "evidence", id), {
+      const evidenceRef = doc(db, "evidence", id);
+      const evidenceRecord = {
         uuid      : id,
+        createdByUid: auth.currentUser.uid,
         status    : "SEALED",
         hash      : hash,
         ts        : payload.ts,
@@ -379,8 +603,12 @@ export default function ForensicQRGenerator() {
           exhibit  : payload.exhibitNo,
           division : payload.division,
           priority : payload.priority,
-          seal     : payload.seal,
-          source   : payload.src
+          seal             : payload.seal,
+          source           : payload.src,
+          reportLanguage   : payload.reportLanguage,
+          village          : payload.village,
+          district         : payload.district,
+          state            : payload.state
         },
         officer   : {
           name       : payload.op,
@@ -389,17 +617,25 @@ export default function ForensicQRGenerator() {
           receivedBy : payload.receivedBy
         },
         evidence  : payload.sec
-      });
-      await addDoc(collection(db, "evidence", id, "history"), {
-        action: "created",
-        by: name.trim() + " (" + badge.trim() + ")",
-        time: serverTimestamp()
+      };
+      await runTransaction(db, async (transaction) => {
+        const existing = await transaction.get(evidenceRef);
+        if (existing.exists()) throw new Error("Package ID already exists. Generate the package again to create a new ID.");
+        transaction.set(evidenceRef, evidenceRecord);
       });
     } catch (e) {
       setValidationError("Database save failed: " + e.message);
       setLoading(false);
       return;
     }
+
+    // The evidence record is already saved. A duplicate/retried audit event
+    // must not make the user think the case itself failed to save.
+    await addDoc(collection(db, "evidence", id, "history"), {
+        action: "created",
+        by: auth.currentUser.email,
+        time: serverTimestamp()
+    }).catch((e) => console.warn("Evidence saved, but its creation audit entry was not added:", e));
 
     const formattedReport = `
 
@@ -420,6 +656,10 @@ FSL DIVISION  : ${labDivision.trim()}
 RECEIVED BY   : ${(receivingOfficer.trim() || name.trim())}
 SEAL CONDITION: ${sealCondition.trim()}
 PRIORITY      : ${priorityLevel.trim()}
+REPORT LANGUAGE : ${{ en: "English", hi: "Hindi", te: "Telugu" }[payload.reportLanguage]}
+VILLAGE       : ${payload.village || "Not recorded"}
+DISTRICT      : ${payload.district || "Not recorded"}
+STATE         : ${payload.state || "Not recorded"}
 EVIDENCE FROM : ${finalEvidenceSource.trim()}
 ================================
 [ CHAIN OF CUSTODY ]
@@ -448,6 +688,8 @@ END OF RECORD`.trim();
      */
     setQrData(formattedReport);
     setManifest({ id, timestamp, hash });
+    setQrDownloaded(false);
+    setReportExportStarted(false);
     playBeep();
     setLoading(false);
   };
@@ -458,6 +700,9 @@ END OF RECORD`.trim();
     setRole("");
     setCaseNumber("");
     setExhibitNumber("");
+    setVillage("");
+    setDistrict("");
+    setRegionState("");
     setLabDivision("Digital Forensics");
     setReceivingOfficer("");
     setSealCondition("Intact");
@@ -468,23 +713,190 @@ END OF RECORD`.trim();
     setExpandedIndex(0);
     setQrData("");
     setManifest(null);
+    setQrDownloaded(false);
+    setReportExportStarted(false);
     setValidationError("");
   };
 
   const saveQR = () => {
-    const canvas = qrRef.current.querySelector("canvas");
+    const canvas = qrRef.current?.querySelector("canvas");
+    if (!canvas) return;
     const link = document.createElement("a");
     link.download = "forensic_qr.png";
     link.href = canvas.toDataURL();
     link.click();
+    setQrDownloaded(true);
+  };
+
+  const requestNavigation = (action) => {
+    if (manifest && (!qrDownloaded || !reportExportStarted)) {
+      setPendingSaveAction(() => action);
+      setShowSaveReminder(true);
+      return;
+    }
+    action();
+  };
+
+  const dismissSaveReminder = () => {
+    setShowSaveReminder(false);
+    setPendingSaveAction(null);
+  };
+
+  const continueWithoutSaving = () => {
+    const action = pendingSaveAction;
+    setShowSaveReminder(false);
+    setPendingSaveAction(null);
+    action?.();
   };
 
   const copyReport = () => {
     navigator.clipboard.writeText(qrData);
   };
 
+  const printLocalizedReport = (report, language) => {
+    const popup = window.open("", "_blank");
+    if (!popup) {
+      window.alert("Allow pop-ups to print or save this localized report as PDF.");
+      return false;
+    }
+    popup.opener = null;
+
+    const t = (text) => REPORT_TEXT[language]?.[text] || text;
+    const controlled = (text) => {
+      const common = {
+        "Digital Forensics": language === "hi" ? "डिजिटल फोरेंसिक" : "డిజిటల్ ఫోరెన్సిక్స్",
+        "Cyber Forensics": language === "hi" ? "साइबर फोरेंसिक" : "సైబర్ ఫోరెన్సిక్స్",
+        "Biology / DNA": language === "hi" ? "जीवविज्ञान / डीएनए" : "జీవశాస్త్రం / DNA",
+        "Chemistry / Toxicology": language === "hi" ? "रसायन विज्ञान / विषविज्ञान" : "రసాయన శాస్త్రం / టాక్సికాలజీ",
+        "Ballistics": language === "hi" ? "बैलिस्टिक्स" : "బాలిస్టిక్స్",
+        "Questioned Documents": language === "hi" ? "विवादित दस्तावेज़" : "వివాదాస్పద పత్రాలు",
+        "Fingerprint Bureau": language === "hi" ? "फिंगरप्रिंट ब्यूरो" : "వేలిముద్రల విభాగం",
+        "Crime Scene Unit": language === "hi" ? "अपराध स्थल इकाई" : "నేర స్థల విభాగం",
+        "General Forensic Intake": language === "hi" ? "सामान्य फोरेंसिक प्राप्ति" : "సాధారణ ఫోరెన్సిక్ స్వీకరణ",
+        "Routine": language === "hi" ? "सामान्य" : "సాధారణం",
+        "Urgent": language === "hi" ? "अत्यावश्यक" : "అత్యవసరం",
+        "Court Priority": language === "hi" ? "न्यायालय प्राथमिकता" : "న్యాయస్థాన ప్రాధాన్యత",
+        "Re-examination": language === "hi" ? "पुनः परीक्षा" : "పునఃపరీక్ష",
+        "Supplementary Submission": language === "hi" ? "पूरक प्रस्तुति" : "అనుబంధ సమర్పణ",
+        "Intact": language === "hi" ? "अखंड" : "చెక్కుచెదరని స్థితి",
+        "Broken / Re-sealed": language === "hi" ? "टूटी / पुनः सील की गई" : "విరిగినది / మళ్లీ సీల్ చేసినది",
+        "Partially damaged": language === "hi" ? "आंशिक रूप से क्षतिग्रस्त" : "పాక్షికంగా దెబ్బతిన్నది",
+        "Unsealed on receipt": language === "hi" ? "प्राप्ति के समय बिना सील" : "స్వీకరణ సమయంలో సీల్ లేనిది",
+        "Not applicable": language === "hi" ? "लागू नहीं" : "వర్తించదు",
+      };
+      return common[text] || t(text);
+    };
+    const data = report.packageData || {};
+    const value = (input) => String(input ?? "").trim() || t("Not recorded");
+    const dateValue = (input) => {
+      const parsed = new Date(input);
+      return Number.isNaN(parsed.getTime()) ? value(input) : parsed.toLocaleString(language === "hi" ? "hi-IN" : "te-IN");
+    };
+    const row = (label, input, translateValue = false) => `<div class="row"><span>${escapeReportHtml(t(label))}</span><strong>${escapeReportHtml(translateValue ? controlled(value(input)) : value(input))}</strong></div>`;
+    const trusted = report.trustStatus === "TRUSTED SEAL";
+    const localeName = language === "hi" ? "हिन्दी" : "తెలుగు";
+    const checklist = (report.checklist || []).map((item) => `<div class="row"><span>${escapeReportHtml(t(item.label))}</span><strong>${escapeReportHtml(t(item.status === "PASS" ? "PASSED" : item.status))}</strong></div>`).join("");
+    const indicators = (report.indicators || []).map((item) => `<li>${escapeReportHtml(t(item))}</li>`).join("");
+    const manifestItems = Array.isArray(data.sec) ? data.sec : [];
+    const manifest = manifestItems.slice(0, 4).map((item, index) => `<div class="manifest-item"><strong>${index + 1}. ${escapeReportHtml(item.title || t("Evidence Item"))}</strong><p>${escapeReportHtml(item.content || t("No details recorded."))}</p></div>`).join("") || `<p>${escapeReportHtml(t("No evidence manifest was embedded in this payload."))}</p>`;
+    const omittedManifestNote = manifestItems.length > 4 ? `<p class="omitted">${escapeReportHtml(t("Additional manifest items omitted from this two-page summary:"))} ${manifestItems.length - 4}</p>` : "";
+    const sourceId = escapeReportHtml(String(data.caseNo || report.hash || "").replace(/[^a-z0-9_-]/gi, "_"));
+    const title = t("FORENSIC EVIDENCE REPORT");
+    const fontUrl = language === "hi" ? devanagariFontUrl : teluguFontUrl;
+    const issued = new Date().toLocaleString(language === "hi" ? "hi-IN" : "te-IN");
+    const classification = controlled(report.classification || "PHANIX Secure Package");
+    const trustDescription = t(report.trustDescription || "");
+    const markup = `
+      <article class="page">
+        <header><div><div class="brand">P.H.A.N.I.X</div><h1>${escapeReportHtml(title)}</h1></div><div class="badge ${trusted ? "ok" : "review"}">${escapeReportHtml(t(report.trustStatus))}</div></header>
+        <p class="meta">${escapeReportHtml(t("Issued"))}: ${escapeReportHtml(issued)} <span>${escapeReportHtml(t("Certificate"))}: ${escapeReportHtml(String(report.hash || "").slice(0, 18).toUpperCase())}</span></p>
+        <section class="verdict"><h2>${escapeReportHtml(classification)}</h2><p>${escapeReportHtml(trustDescription)}</p></section>
+        <section><h2>${escapeReportHtml(t("CASE SUMMARY"))}</h2><div class="grid">
+          ${row("CASE NUMBER", data.caseNo)}${row("EXHIBIT NUMBER", data.exhibitNo)}${row("PACKAGE ID", data.uid)}${row("REFERENCE TIME", dateValue(data.ts || report.timestamp))}${row("FSL DIVISION", data.division, true)}${row("PRIORITY", data.priority, true)}${row("REPORT LANGUAGE", ({ en: "English", hi: "Hindi", te: "Telugu" })[data.reportLanguage] || data.reportLanguage)}${row("VILLAGE", data.village)}${row("DISTRICT", data.district)}${row("STATE", data.state)}
+        </div></section>
+        <section><h2>${escapeReportHtml(t("OFFICER, SOURCE AND CUSTODY"))}</h2><div class="grid">
+          ${row("OPERATOR", data.op)}${row("BADGE / ROLE", `${value(data.bid)} / ${value(data.role)}`)}${row("RECEIVED BY", data.receivedBy)}${row("SEAL CONDITION", data.seal, true)}${row("EVIDENCE SOURCE", data.src)}
+        </div></section>
+        <section><h2>${escapeReportHtml(t("CHAIN OF CUSTODY SNAPSHOT"))}</h2><ol class="custody">
+          <li><strong>${escapeReportHtml(t("Collected"))}</strong><span>${escapeReportHtml(`${value(data.op)} (${value(data.bid)})`)}</span></li>
+          <li><strong>${escapeReportHtml(t("Source logged"))}</strong><span>${escapeReportHtml(value(data.src))}</span></li>
+          <li><strong>${escapeReportHtml(t("FSL received"))}</strong><span>${escapeReportHtml(value(data.receivedBy))}</span></li>
+          <li><strong>${escapeReportHtml(t("Digital seal"))}</strong><span>${escapeReportHtml(dateValue(data.ts || report.timestamp))}</span></li>
+        </ol></section>
+        <footer>${escapeReportHtml(t("Choose the PDF language. Original case notes and identifiers remain unchanged."))}</footer>
+      </article>
+      <article class="page page-two">
+        <header><div><div class="brand">P.H.A.N.I.X</div><h1>${escapeReportHtml(title)}</h1></div><span class="page-label">${escapeReportHtml(t("CRYPTOGRAPHIC SIGNATURE"))}</span></header>
+        <section><h2>${escapeReportHtml(t("CRYPTOGRAPHIC SIGNATURE"))}</h2><div class="hash">${escapeReportHtml(report.hash || "")}</div></section>
+        <section><h2>${escapeReportHtml(t("VALIDATION CHECKLIST"))}</h2>${checklist || `<p>${escapeReportHtml(t("No details recorded."))}</p>`}</section>
+        <section><h2>${escapeReportHtml(t("FORENSIC INDICATORS"))}</h2><ul>${indicators || `<li>${escapeReportHtml(t("No details recorded."))}</li>`}</ul></section>
+        <section><h2>${escapeReportHtml(t("EVIDENCE MANIFEST"))}</h2>${manifest}${omittedManifestNote}</section>
+        <section class="advisory"><h2>${escapeReportHtml(t("DOCUMENT ADVISORY"))}</h2><p>${escapeReportHtml(t("This two-page certificate is a concise evidentiary summary. Preserve the original QR payload and generated file together for full verification."))}</p></section>
+        <footer>${escapeReportHtml(localeName)} · ${escapeReportHtml(t("Original case notes and identifiers remain unchanged."))}</footer>
+      </article>`;
+
+    popup.document.open();
+    popup.document.write(`<!doctype html><html lang="${language}"><head><meta charset="utf-8"><title>${escapeReportHtml(title)}_${sourceId}</title>
+      <style>
+        @font-face{font-family:ReportIndic;src:url("${fontUrl}") format("truetype");font-weight:400;font-display:swap}
+        *{box-sizing:border-box}body{margin:0;background:#e4e4e7;color:#18181b;font:12px ReportIndic,Arial,sans-serif;line-height:1.5}
+        .page{width:210mm;min-height:297mm;margin:16px auto;padding:16mm;background:white;display:flex;flex-direction:column;gap:10px}
+        header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2563eb;padding-bottom:12px}.brand{font-size:12px;font-weight:bold;letter-spacing:2px;color:#2563eb}h1{font-size:21px;margin:4px 0 0}h2{font-size:13px;margin:0 0 8px;color:#1d4ed8;border-bottom:1px solid #d4d4d8;padding-bottom:5px}
+        .badge,.page-label{padding:6px 10px;border-radius:5px;font-weight:bold;font-size:11px}.ok{background:#dcfce7;color:#166534}.review{background:#fef3c7;color:#92400e}.meta{display:flex;justify-content:space-between;color:#52525b;font-size:10px;margin:0}.verdict{background:#f4f4f5;border-left:4px solid #2563eb;padding:10px 12px}.verdict h2{color:#18181b;border:0;margin:0 0 4px}.verdict p{margin:0}
+        section{border:1px solid #e4e4e7;border-radius:6px;padding:10px 12px;break-inside:avoid}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}.row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f1f1f3;padding:5px 0}.row:last-child{border-bottom:0}.row span{color:#52525b}.row strong{text-align:right;overflow-wrap:anywhere;font-weight:600}.custody{margin:0;padding-left:22px}.custody li{padding:4px 0}.custody strong{display:inline-block;min-width:130px}.hash{font:11px monospace;overflow-wrap:anywhere;padding:10px;background:#f4f4f5;border:1px solid #e4e4e7}.manifest-item{padding:7px 0;border-bottom:1px solid #e4e4e7}.manifest-item p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.advisory{background:#eff6ff}.advisory p{margin:0}ul{margin:0;padding-left:22px}li{margin:3px 0}footer{margin-top:auto;padding-top:8px;border-top:1px solid #e4e4e7;color:#52525b;font-size:9px}.page-two{break-before:page;page-break-before:always}
+        @page{size:A4;margin:0}@media print{body{background:white}.page{margin:0;width:210mm;min-height:297mm;box-shadow:none}.page-two{break-before:page;page-break-before:always}}
+      </style></head><body>${markup}</body></html>`);
+    popup.document.close();
+    popup.document.fonts.ready.then(() => {
+      popup.focus();
+      popup.print();
+    });
+    return true;
+  };
+
+  const printLocalizedFailureReport = (source, language) => {
+    const popup = window.open("", "_blank");
+    if (!popup) {
+      window.alert("Allow pop-ups to print or save this localized report as PDF.");
+      return;
+    }
+    popup.opener = null;
+    const t = (text) => REPORT_TEXT[language]?.[text] || text;
+    const reportId = `ERR_${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
+    const locale = language === "hi" ? "hi-IN" : "te-IN";
+    const sourceLabel = source === "LIVE_CAMERA_SCAN" ? (language === "hi" ? "लाइव कैमरा स्कैन" : "లైవ్ కెమెరా స్కాన్") : source === "FORENSIC_IMAGE_INTAKE" ? (language === "hi" ? "फोरेंसिक छवि प्राप्ति" : "ఫోరెన్సిక్ చిత్రం స్వీకరణ") : escapeReportHtml(source || "INTERNAL_SCAN");
+    const actions = ["Capture a sharper image under even lighting.", "Avoid glare, heavy cropping, rotation, and compression.", "Preserve the original media file before further handling.", "If physical evidence is damaged, document condition with photographs.", "Rescan the source after stabilizing the image or camera feed."];
+    const fontUrl = language === "hi" ? devanagariFontUrl : teluguFontUrl;
+    const title = t("FORENSIC ANALYSIS FAILURE REPORT");
+    const sections = (heading, content) => `<section><h2>${escapeReportHtml(t(heading))}</h2>${content}</section>`;
+    const html = `<article class="page"><header><div><div class="brand">P.H.A.N.I.X</div><h1>${escapeReportHtml(title)}</h1></div><span class="badge">${escapeReportHtml(t("QR CORRUPTED"))}</span></header>
+      <p class="meta">${escapeReportHtml(t("Issued"))}: ${escapeReportHtml(new Date().toLocaleString(locale))}<span>${escapeReportHtml(t("Certificate"))}: ${reportId}</span></p>
+      ${sections("INTAKE SUMMARY", `<div class="row"><span>${escapeReportHtml(t("Report ID"))}</span><strong>${reportId}</strong></div><div class="row"><span>${escapeReportHtml(t("Evidence source"))}</span><strong>${sourceLabel}</strong></div><div class="row"><span>${escapeReportHtml(t("Intake timestamp"))}</span><strong>${escapeReportHtml(new Date().toLocaleString(locale))}</strong></div>`)}
+      ${sections("FAILURE STATUS", ["Pattern detection", "Data extraction", "Integrity check", "PHANIX seal validation"].map((label, i) => `<div class="row"><span>${escapeReportHtml(t(label))}</span><strong>${escapeReportHtml(t(i < 2 ? "FAIL" : "SKIP"))}</strong></div>`).join(""))}
+      ${sections("CASE HANDLING NOTE", `<p>${escapeReportHtml(t("Attach this failure report to the incident file only as documentation of non-extractable QR evidence. It does not certify authenticity, origin, or payload integrity."))}</p>`)}
+      <footer>${escapeReportHtml(t("Original case notes and identifiers remain unchanged."))}</footer></article>
+      <article class="page page-two"><header><div><div class="brand">P.H.A.N.I.X</div><h1>${escapeReportHtml(title)}</h1></div><span class="page-label">${escapeReportHtml(t("Page"))} 2</span></header>
+      ${sections("TECHNICAL OBSERVATION", `<p>${escapeReportHtml(t("The analysis pipeline attempted QR pattern discovery and data extraction. The evidence did not provide a readable payload suitable for SHA-256 comparison or PHANIX package reconstruction."))}</p>`)}
+      ${sections("RECOMMENDED NEXT ACTIONS", `<ol>${actions.map((action) => `<li>${escapeReportHtml(t(action))}</li>`).join("")}</ol>`)}
+      ${sections("EVIDENTIARY LIMITATION", `<p>${escapeReportHtml(t("This document is a failure certificate, not a verification certificate. It confirms that the QR could not be decoded by the application at intake time. Treat any later manual reconstruction as a separate examination event."))}</p>`)}
+      ${sections("FORENSIC ADVISORY", `<p>${escapeReportHtml(t("Keep this two-page failure report with the original intake material and retry validation only from preserved source media."))}</p>`)}
+      <footer>${escapeReportHtml(t("Original case notes and identifiers remain unchanged."))}</footer></article>`;
+    popup.document.open();
+    popup.document.write(`<!doctype html><html lang="${language}"><head><meta charset="utf-8"><title>${escapeReportHtml(title)}_${reportId}</title><style>
+      @font-face{font-family:ReportIndic;src:url("${fontUrl}") format("truetype");font-weight:400;font-display:swap}*{box-sizing:border-box}body{margin:0;background:#e4e4e7;color:#18181b;font:12px ReportIndic,Arial,sans-serif;line-height:1.5}.page{width:210mm;min-height:297mm;margin:16px auto;padding:16mm;background:#fff;display:flex;flex-direction:column;gap:12px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #b91c1c;padding-bottom:12px}.brand{font-size:12px;font-weight:bold;letter-spacing:2px;color:#b91c1c}h1{font-size:20px;margin:4px 0 0}.badge,.page-label{padding:6px 10px;border-radius:5px;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:bold}.meta{display:flex;justify-content:space-between;color:#52525b;font-size:10px;margin:0}section{border:1px solid #e4e4e7;border-radius:6px;padding:10px 12px;break-inside:avoid}h2{font-size:13px;margin:0 0 8px;color:#991b1b;border-bottom:1px solid #e4e4e7;padding-bottom:5px}p{margin:4px 0}.row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f1f1f3;padding:5px 0}.row:last-child{border:0}.row span{color:#52525b}.row strong{text-align:right}.page ol{margin:0;padding-left:24px}.page li{margin:6px 0}footer{margin-top:auto;padding-top:8px;border-top:1px solid #e4e4e7;color:#52525b;font-size:9px}.page-two{break-before:page;page-break-before:always}@page{size:A4;margin:0}@media print{body{background:white}.page{margin:0;width:210mm;min-height:297mm;box-shadow:none}.page-two{break-before:page;page-break-before:always}}</style></head><body>${html}</body></html>`);
+    popup.document.close();
+    popup.document.fonts.ready.then(() => {
+      popup.focus();
+      popup.print();
+    });
+  };
+
   const exportForensicReportPdf = (report) => {
-    if (!report) return;
+    if (!report) return false;
+
+    if (reportLanguage !== "en") {
+      return printLocalizedReport(report, reportLanguage);
+    }
 
     const doc = new jsPDF();
     const data = report.packageData || {};
@@ -614,7 +1026,8 @@ END OF RECORD`.trim();
       field("SEAL CONDITION", data.seal, 110, y)
     );
     y = nextY + 6;
-    field("EVIDENCE SOURCE", data.src, 20, y, 168, 3);
+    const sourceLocation = [data.village, data.district, data.state].filter(Boolean).join(", ") || "Not recorded";
+    field("SOURCE & LOCATION", `Source: ${value(data.src)}\nReport language: ${value(({ en: "English", hi: "Hindi", te: "Telugu" })[data.reportLanguage] || data.reportLanguage)}\nVillage / District / State: ${sourceLocation}`, 20, y, 168, 3);
 
     y = section("CHAIN OF CUSTODY SNAPSHOT", 220);
     [
@@ -682,6 +1095,7 @@ END OF RECORD`.trim();
 
     const fileId = value(data.caseNo, report.hash.substring(0, 8)).replace(/[^a-z0-9_-]/gi, "_");
     doc.save(`Forensic_Evidence_Report_${fileId}.pdf`);
+    return true;
   };
 
   const downloadForensicReport = () => {
@@ -695,7 +1109,7 @@ END OF RECORD`.trim();
       ? `${evidenceSource} [ ${locationDetails} ]`
       : evidenceSource;
 
-    exportForensicReportPdf({
+    const exportStarted = exportForensicReportPdf({
       hash: manifest.hash,
       timestamp: manifest.timestamp,
       classification: "PHANIX Secure Package",
@@ -721,6 +1135,10 @@ END OF RECORD`.trim();
         receivedBy: receivingOfficer.trim() || name.trim(),
         seal: sealCondition.trim(),
         priority: priorityLevel.trim(),
+        reportLanguage,
+        village: village.trim(),
+        district: district.trim(),
+        state: regionState.trim(),
         src: finalEvidenceSource.trim(),
         sec: sections.map((section) => ({
           title: section.title.trim().toUpperCase() || "EVIDENCE ITEM",
@@ -728,9 +1146,15 @@ END OF RECORD`.trim();
         }))
       }
     });
+    if (exportStarted) setReportExportStarted(true);
   };
 
   const downloadCorruptionReport = (source) => {
+    if (reportLanguage !== "en") {
+      printLocalizedFailureReport(source, reportLanguage);
+      return;
+    }
+
     const doc = new jsPDF();
     const reportId = `ERR_${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
     const colors = {
@@ -899,7 +1323,7 @@ END OF RECORD`.trim();
             // Engine 1: ZXing (Primary)
             const result = await codeReaderRef.current.decodeFromImageUrl(canvas.toDataURL());
             return result.getText();
-          } catch (e) {
+          } catch {
             // Engine 2: jsQR (Secondary Accuracy Layer)
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const code = jsQR(imageData.data, imageData.width, imageData.height, {
@@ -964,8 +1388,6 @@ END OF RECORD`.trim();
       { label: "Internal Hash Check", status: "SKIP" },
       { label: "Authenticity Seal", status: "NONE" }
     ];
-
-    const lowerData = rawData.toLowerCase();
 
     // Simplified Verification Logic for PHANIX reports
     if (phanixData) {
@@ -1064,6 +1486,13 @@ END OF RECORD`.trim();
 
     // NEW QR FORMAT: "PHANIX:<uuid>" -> look up the record in the database
     if (content.trim().startsWith("PHANIX:")) {
+      if (!authReady || (!approvedOfficer && !adminUser)) {
+        setValidationError(signedInUser
+          ? "This account is not approved to read evidence records."
+          : "Sign in with an approved account to load and verify this package.");
+        if (!signedInUser) setIsAdminLoginOpen(true);
+        return;
+      }
       const evidenceId = content.trim().slice(7).trim();
       try {
         const snap = await getDoc(doc(db, "evidence", evidenceId));
@@ -1091,6 +1520,10 @@ END OF RECORD`.trim();
             seal: record.case.seal,
             priority: record.case.priority,
             src: record.case.source,
+            ...(Object.prototype.hasOwnProperty.call(record.case, "reportLanguage") ? { reportLanguage: record.case.reportLanguage } : {}),
+            ...(Object.prototype.hasOwnProperty.call(record.case, "village") ? { village: record.case.village } : {}),
+            ...(Object.prototype.hasOwnProperty.call(record.case, "district") ? { district: record.case.district } : {}),
+            ...(Object.prototype.hasOwnProperty.call(record.case, "state") ? { state: record.case.state } : {}),
             uid: record.uuid,
             ts: record.ts,
             sec: record.evidence.map((e) => ({ title: e.title, content: e.content }))
@@ -1108,6 +1541,10 @@ END OF RECORD`.trim();
             seal: record.seal,
             priority: record.priority,
             src: record.source,
+            ...(Object.prototype.hasOwnProperty.call(record, "reportLanguage") ? { reportLanguage: record.reportLanguage } : {}),
+            ...(Object.prototype.hasOwnProperty.call(record, "village") ? { village: record.village } : {}),
+            ...(Object.prototype.hasOwnProperty.call(record, "district") ? { district: record.district } : {}),
+            ...(Object.prototype.hasOwnProperty.call(record, "state") ? { state: record.state } : {}),
             uid: record.uuid,
             ts: record.ts,
             sec: record.evidence.map((e) => ({ title: e.title, content: e.content }))
@@ -1124,6 +1561,7 @@ END OF RECORD`.trim();
         await addDoc(collection(db, "evidence", evidenceId, "history"), {
           action: "verified",
           result: "VERIFIED",
+          by: auth.currentUser.email,
           time: serverTimestamp()
         }).catch(() => {});
         setScanResult({ type: 'valid', data: payload, hash: record.hash });
@@ -1157,6 +1595,12 @@ END OF RECORD`.trim();
       const extractedSeal = getValue('SEAL CONDITION');
       const extractedPriority = getValue('PRIORITY');
       const extractedSrc = getValue('EVIDENCE FROM');
+      const extractedReportLanguageLabel = getValue('REPORT LANGUAGE');
+      const extractedReportLanguage = ({ English: "en", Hindi: "hi", Telugu: "te" })[extractedReportLanguageLabel] || "";
+      const emptyIfNotRecorded = (value) => value === "Not recorded" ? "" : value;
+      const extractedVillage = emptyIfNotRecorded(getValue('VILLAGE'));
+      const extractedDistrict = emptyIfNotRecorded(getValue('DISTRICT'));
+      const extractedState = emptyIfNotRecorded(getValue('STATE'));
 
       let extractedHash = "";
       const hashIndex = lines.findIndex(l => l.includes("SHA-256 HASH:"));
@@ -1206,6 +1650,8 @@ END OF RECORD`.trim();
             seal: extractedSeal,
             priority: extractedPriority,
             src: extractedSrc,
+            ...(extractedReportLanguage ? { reportLanguage: extractedReportLanguage } : {}),
+            ...(extractedReportLanguage ? { village: extractedVillage, district: extractedDistrict, state: extractedState } : {}),
             sec: extractedSec
           }
         };
@@ -1222,6 +1668,8 @@ END OF RECORD`.trim();
           seal: extractedSeal,
           priority: extractedPriority,
           src: extractedSrc,
+          ...(extractedReportLanguage ? { reportLanguage: extractedReportLanguage } : {}),
+          ...(extractedReportLanguage ? { village: extractedVillage, district: extractedDistrict, state: extractedState } : {}),
           uid: extractedId,
           ts: extractedTimestamp,
           sec: extractedSec
@@ -1238,7 +1686,7 @@ END OF RECORD`.trim();
           } else if (verdict === null) {
             verdict = "UNREGISTERED";
           }
-        } catch (e) {
+        } catch {
           if (verdict === null) verdict = "UNREGISTERED";
         }
 
@@ -1266,6 +1714,24 @@ END OF RECORD`.trim();
     boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
   };
 
+  const aboutLinkStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "12px 13px",
+    marginTop: 8,
+    borderRadius: 10,
+    border: "1px solid #3f3f46",
+    background: "rgba(9,9,11,0.65)",
+    color: "#f4f4f5",
+    textDecoration: "none",
+    transition: "border-color 0.2s ease, background 0.2s ease, transform 0.2s ease",
+  };
+  const aboutLinkEyebrowStyle = { display: "block", marginBottom: 4, color: "#60a5fa", fontSize: 9, fontWeight: 700, letterSpacing: "1.2px" };
+  const aboutLinkTitleStyle = { display: "block", fontSize: 13, fontWeight: 600 };
+  const aboutArrowStyle = { color: "#60a5fa", fontSize: 18, fontWeight: 700 };
+
   const fslFieldStyle = {
     padding: "12px 16px",
     borderRadius: 4,
@@ -1276,6 +1742,8 @@ END OF RECORD`.trim();
     fontSize: 14,
     transition: "all 0.2s",
     width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
   };
 
   const fslLabelStyle = {
@@ -1302,6 +1770,64 @@ END OF RECORD`.trim();
     { step: "QR Sealed", detail: qrData ? "SHA-256 package generated" : "Pending package generation" },
   ];
 
+  if (!authReady) {
+    return (
+      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#18181b", color: "#e4e4e7", fontFamily: "Inter, sans-serif" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>PHANIX</div>
+          <p style={{ color: "#a1a1aa", fontSize: 13 }}>Checking your sign-in…</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!approvedOfficer && !adminUser) {
+    const handleSignIn = async (event) => {
+      event.preventDefault();
+      setAdminError("");
+      try {
+        const credential = await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPass);
+        setAdminPass("");
+        if (credential.user.email?.toLowerCase() === "nittalaphaneendhar@gmail.com") setTab("admin");
+      } catch {
+        setAdminError("Sign-in failed. Check your email and password.");
+      }
+    };
+
+    return (
+      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, boxSizing: "border-box", background: "#18181b", color: "#f4f4f5", fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+        <section style={{ width: "100%", maxWidth: 420, padding: 32, boxSizing: "border-box", borderRadius: 16, background: "#202024", border: "1px solid #3f3f46", boxShadow: "0 16px 48px rgba(0,0,0,0.25)" }}>
+          <div style={{ width: 44, height: 44, display: "grid", placeItems: "center", borderRadius: 12, color: "#93c5fd", background: "rgba(59,130,246,0.14)", border: "1px solid rgba(59,130,246,0.28)", fontWeight: 800, fontSize: 17 }}>P</div>
+          <h1 style={{ margin: "18px 0 6px", fontSize: 24 }}>Sign in</h1>
+          <p style={{ margin: "0 0 22px", color: "#a1a1aa", fontSize: 13, lineHeight: 1.6 }}>Use the account provided by the site owner to continue.</p>
+          {signedInUser ? (
+            <div>
+              <div role="alert" style={{ marginBottom: 16, padding: 12, borderRadius: 8, color: "#fca5a5", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", fontSize: 13 }}>{adminError || "This account is not approved to access the site."}</div>
+              <button type="button" onClick={() => signOut(auth)} style={{ width: "100%", padding: 12, border: 0, borderRadius: 8, background: "#3b82f6", color: "white", fontWeight: 700, cursor: "pointer" }}>Sign out and use another account</button>
+            </div>
+          ) : (
+            <form onSubmit={handleSignIn}>
+              <label htmlFor="account-email" style={{ display: "block", marginBottom: 7, color: "#d4d4d8", fontSize: 12, fontWeight: 600 }}>Email</label>
+              <input id="account-email" type="email" autoComplete="username" required value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} placeholder="name@example.com" style={{ width: "100%", boxSizing: "border-box", marginBottom: 16, padding: "12px 14px", borderRadius: 8, border: "1px solid #52525b", background: "#09090b", color: "#f4f4f5", fontSize: 14 }} />
+              <label htmlFor="account-password" style={{ display: "block", marginBottom: 7, color: "#d4d4d8", fontSize: 12, fontWeight: 600 }}>Password</label>
+              <div style={{ position: "relative", marginBottom: 16 }}>
+                <input id="account-password" type={showSignInPassword ? "text" : "password"} autoComplete="current-password" required value={adminPass} onChange={(event) => setAdminPass(event.target.value)} placeholder="Enter your password" style={{ width: "100%", boxSizing: "border-box", padding: "12px 48px 12px 14px", borderRadius: 8, border: "1px solid #52525b", background: "#09090b", color: "#f4f4f5", fontSize: 14 }} />
+                <button type="button" aria-label={showSignInPassword ? "Hide password" : "Show password"} aria-pressed={showSignInPassword} onClick={() => setShowSignInPassword((visible) => !visible)} style={{ position: "absolute", top: 0, right: 4, height: 44, width: 40, display: "grid", placeItems: "center", border: 0, borderRadius: 6, background: "transparent", color: "#a1a1aa", cursor: "pointer" }}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    {showSignInPassword ? <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/></> : <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></>}
+                  </svg>
+                </button>
+              </div>
+              {adminError && <div role="alert" style={{ marginBottom: 14, padding: 10, borderRadius: 8, color: "#fca5a5", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", fontSize: 12 }}>{adminError}</div>}
+              <button type="submit" style={{ width: "100%", padding: 12, border: 0, borderRadius: 8, background: "#3b82f6", color: "white", fontWeight: 700, cursor: "pointer" }}>Sign in</button>
+            </form>
+          )}
+          <div style={{ marginTop: 18, textAlign: "center", color: "#71717a", fontSize: 11 }}>Access is provided by the site owner.</div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <div
       style={{
@@ -1327,6 +1853,7 @@ END OF RECORD`.trim();
           alignItems: 'center',
           marginBottom: '30px',
           position: 'relative',
+          zIndex: 130,
           gap: '20px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -1337,7 +1864,6 @@ END OF RECORD`.trim();
                 width: '45px', 
                 height: '45px', 
                 borderRadius: '50%',
-                boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
                 border: `2px solid ${accent}`
               }} 
             />
@@ -1349,7 +1875,6 @@ END OF RECORD`.trim();
               fontSize: 24,
               letterSpacing: 2,
               fontFamily: 'inherit',
-              textShadow: '0 0 15px rgba(59, 130, 246, 0.3)'
             }}>
               FORENSIC-QR-ARCHITECT
             </span>
@@ -1357,30 +1882,59 @@ END OF RECORD`.trim();
           
           <div style={{
               display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 12,
               borderLeft: '1px solid #3f3f46',
               paddingLeft: '20px',
               height: '42px'
           }}>
-            <div style={{
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{
                 fontSize: '11px',
                 color: '#a1a1aa',
                 letterSpacing: '0.2px',
                 fontWeight: 400,
                 lineHeight: '1.2'
-            }}>
+              }}>
                 Powered by
-            </div>
-            <div style={{
+              </div>
+              <div style={{
                 color: accent,
                 fontWeight: 700,
                 fontSize: '14px',
                 letterSpacing: '1px',
                 lineHeight: '1.4',
                 textTransform: 'uppercase'
-            }}>
+              }}>
                 P.H.A.N.I.X 
+              </div>
+            </div>
+            <div ref={developerMenuRef} style={{ position: "relative", zIndex: 150 }}>
+              <button
+                type="button"
+                aria-label="Developer information"
+                aria-expanded={isDeveloperInfoOpen}
+                title="Developer information"
+                onClick={() => setIsDeveloperInfoOpen((open) => !open)}
+                style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', borderRadius: 9, background: isDeveloperInfoOpen ? "#3f3f46" : '#27272a', border: '1px solid #3f3f46', color: '#93c5fd', cursor: 'pointer' }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14" />
+                </svg>
+              </button>
+              {isDeveloperInfoOpen && (
+                <div role="dialog" aria-label="Developer profile" style={{ position: "absolute", top: 46, right: 0, width: 300, padding: 18, borderRadius: 14, background: "#202024", border: "1px solid #3f3f46", boxShadow: "0 18px 50px rgba(0,0,0,0.45)", color: "#f4f4f5" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <img src={developerPhoto} alt="Phaneendhar Nittala" style={{ width: 64, height: 64, flexShrink: 0, borderRadius: "50%", objectFit: "cover", objectPosition: "center 32%", border: "2px solid #52525b" }} />
+                    <div>
+                      <div style={{ color: "#a1a1aa", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 5 }}>Developer</div>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>Phaneendhar.Nittala</div>
+                    </div>
+                  </div>
+                  <div style={{ height: 1, background: "#3f3f46", margin: "15px 0 12px" }} />
+                  <div style={{ color: "#a1a1aa", fontSize: 12, lineHeight: 1.6 }}>Advanced tools for helping forensic integrity.</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1414,7 +1968,7 @@ END OF RECORD`.trim();
                 <strong style={{ color: accent }}>Professional High-Accuracy for Investigative eXcellence</strong>. 
                 Deploying advanced digital integrity protocols for the modern forensic workflow. 
                 Visit <span 
-                  onClick={triggerIconPulse}
+                  onClick={openAboutMenu}
                   style={{ 
                     color: accent, 
                     cursor: 'pointer', 
@@ -1430,19 +1984,20 @@ END OF RECORD`.trim();
 
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
 
-               {/* i need to channge the link here ok  */}
               {/* ABOUT PHANIX */}
-              <a
-                ref={aboutIconRef}
-                href="https://p-h-a-n-i-x-phaneendhar-s-investigation-expert.vercel.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
+              <div ref={aboutMenuRef} style={{ position: "relative", zIndex: 110, paddingBottom: 20 }}>
+                <button
+                  ref={aboutIconRef}
+                  type="button"
+                  aria-label="About PHANIX and related projects"
+                  aria-expanded={isAboutOpen}
+                  onClick={() => setIsAboutOpen((open) => !open)}
+                  style={{
                   width: 44,
                   height: 44,
                   borderRadius: "50%",
-                  background: isIconPulsing ? accent : "#3f3f46",
-                  border: isIconPulsing ? `2px solid white` : "none",
+                  background: "#3f3f46",
+                  border: "none",
                   color: "#f4f4f5",
                   cursor: "pointer",
                   display: "flex",
@@ -1450,12 +2005,9 @@ END OF RECORD`.trim();
                   justifyContent: "center",
                   fontSize: 18,
                   transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-                  textDecoration: "none",
-                  transform: isIconPulsing ? 'scale(1.2)' : 'scale(1)',
-                  boxShadow: isIconPulsing ? `0 0 20px ${accent}` : 'none',
-                  animation: isIconPulsing ? 'pulse 0.5s ease-in-out infinite' : 'none'
+                  transform: 'scale(1)',
                 }}
-                onMouseEnter={(e) => {
+                  onMouseEnter={(e) => {
                   e.currentTarget.style.background = accent;
                   e.currentTarget.style.transform = 'scale(1.1)';
                 }}
@@ -1463,8 +2015,8 @@ END OF RECORD`.trim();
                   e.currentTarget.style.background = "#3f3f46";
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
-                title="About Phanix"
-              >
+                  title="About PHANIX"
+                >
                 {/* UPGRADED PHANIX BRAND SIGNATURE */}
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M7 21V3H14C16.2091 3 18 4.79086 18 7C18 9.20914 16.2091 11 14 11H7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1472,123 +2024,70 @@ END OF RECORD`.trim();
                   <circle cx="12" cy="7" r="1.5" fill={accent} />
                   <path d="M3 3L5 5" stroke={accent} strokeWidth="2" strokeLinecap="round" />
                 </svg>
-              </a>
+                </button>
+                {isAboutOpen && (
+                  <div style={{ position: "absolute", top: 54, right: 0, width: 310, padding: 18, borderRadius: 14, background: "linear-gradient(145deg, #27272a, #18181b)", border: "1px solid #3f3f46", boxShadow: "0 18px 50px rgba(0,0,0,0.45)", zIndex: 2000 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                      <div style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 11, display: "grid", placeItems: "center", color: "#93c5fd", background: "rgba(59,130,246,0.14)", border: "1px solid rgba(59,130,246,0.3)", fontSize: 19, fontWeight: 800 }}>P</div>
+                      <div>
+                        <div style={{ color: "#f4f4f5", fontSize: 14, fontWeight: 700 }}>Phaneendhar.Nittala</div>
+                        <div style={{ color: "#a1a1aa", fontSize: 12, marginTop: 3 }}>Advanced tools for helping forensic integrity.</div>
+                      </div>
+                    </div>
+                    <div style={{ height: 1, background: "#3f3f46", marginBottom: 12 }} />
+                    <a href="https://p-h-a-n-i-x-phaneendhar-s-investigation-expert.vercel.app/" target="_blank" rel="noopener noreferrer" style={aboutLinkStyle} onClick={() => setIsAboutOpen(false)}>
+                      <span><span style={aboutLinkEyebrowStyle}>01 · LAB</span><strong style={aboutLinkTitleStyle}>My PHANIX Lab</strong></span><span style={aboutArrowStyle}>↗</span>
+                    </a>
+                    <a href="https://p-h-a-n-i-x-investigation-e-xpert.vercel.app/" target="_blank" rel="noopener noreferrer" style={aboutLinkStyle} onClick={() => setIsAboutOpen(false)}>
+                      <span><span style={aboutLinkEyebrowStyle}>02 · SUITE</span><strong style={aboutLinkTitleStyle}>Forenisc Expert Suite</strong></span><span style={aboutArrowStyle}>↗</span>
+                    </a>
+                  </div>
+                )}
+              </div>
 
-              {/* PROFILE AREA - Hover to show popup */}
-              <div
-                style={{ position: 'relative', zIndex: 100, paddingBottom: 20 }}
-                onMouseEnter={() => setIsProfileOpen(true)}
-                onMouseLeave={() => setIsProfileOpen(false)}
-              >
+              {/* SIGNED-IN ACCOUNT MENU */}
+              <div ref={accountMenuRef} style={{ position: "relative", zIndex: 120, paddingBottom: 20 }}>
                 <button
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "50%",
-                    background: "#3f3f46",
-                    border: "none",
-                    color: "#f4f4f5",
-                    cursor: "default",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 18,
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#52525b";
-                    e.currentTarget.style.transform = 'scale(1.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "#3f3f46";
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
+                  type="button"
+                  aria-label="Signed-in account information"
+                  aria-expanded={isAccountMenuOpen}
+                  onClick={() => setIsAccountMenuOpen((open) => !open)}
+                  title="Account information"
+                  style={{ width: 44, height: 44, borderRadius: "50%", background: isAccountMenuOpen ? accent : "#3f3f46", border: "1px solid #52525b", color: "#f4f4f5", cursor: "pointer", display: "grid", placeItems: "center", transition: "background 0.2s" }}
                 >
-                  {/* HIGH-TECH FORENSIC EXPERT BADGE */}
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2L3 7V12C3 17.5 7 21 12 22C17 21 21 17.5 21 12V7L12 2Z" fill="rgba(59,130,246,0.2)" stroke={accent}/>
-                    <circle cx="12" cy="11" r="3" stroke={accent} strokeWidth="1.5" />
-                    <path d="M7 16V16.5C7 18.5 12 20 12 20C12 20 17 18.5 17 16.5V16" stroke={accent} strokeWidth="1.5" />
-                    <line x1="12" y1="8" x2="12" y2="8" stroke={accent} strokeWidth="3" strokeLinecap="round" />
+                  <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 21a8 8 0 0 1 16 0" />
                   </svg>
                 </button>
-
-                <ProfilePopup
-                  isOpen={isProfileOpen}
-                  onClose={() => setIsProfileOpen(false)}
-                />
+                {isAccountMenuOpen && (
+                  <div role="dialog" aria-label="Account information" style={{ position: "absolute", top: 52, right: 0, width: 286, padding: 16, borderRadius: 12, background: "#202024", border: "1px solid #3f3f46", boxShadow: "0 12px 32px rgba(0,0,0,0.35)" }}>
+                    <div style={{ color: "#a1a1aa", fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 10 }}>Signed-in account</div>
+                    <div style={{ color: "#f4f4f5", fontSize: 14, fontWeight: 600, overflowWrap: "anywhere" }}>{signedInUser?.displayName || signedInUser?.email}</div>
+                    <div style={{ marginTop: 6, color: "#a1a1aa", fontSize: 12 }}>{signedInUser?.email}</div>
+                    <div style={{ display: "inline-flex", marginTop: 12, padding: "4px 8px", borderRadius: 6, background: "rgba(59,130,246,0.12)", color: "#93c5fd", fontSize: 11, fontWeight: 600 }}>{adminUser ? "Administrator" : "Approved user"}</div>
+                    <button type="button" onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      requestNavigation(() => signOut(auth));
+                    }} style={{ width: "100%", marginTop: 16, padding: "9px 12px", borderRadius: 7, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "#fca5a5", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Log out</button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          <div style={{
-            marginTop: 30,
-            padding: "20px",
-            background: "#18181b",
-            borderRadius: "8px",
-            border: "1px solid #3f3f46",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "15px"
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ 
-                    width: '36px', 
-                    height: '36px', 
-                    borderRadius: '6px', 
-                    background: 'rgba(59, 130, 246, 0.15)', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    color: accent,
-                    fontSize: '16px',
-                    fontWeight: 700
-                }}>
-                    P
-                </div>
-                <div>
-                    <h3 style={{ margin: "0 0 2px", fontSize: 14, color: "#f4f4f5", fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        Phaneendhar Investigation Expert
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
-                    </h3>
-                    <p style={{ margin: 0, fontSize: 13, color: "#a1a1aa" }}>
-                        Advanced tools for helping forensic integrity.
-                    </p>
-                </div>
-            </div>
+        </div>
 
-            <a
-              href="https://p-h-a-n-i-x-investigation-e-xpert.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                padding: "8px 20px",
-                borderRadius: "6px",
-                background: accent,
-                border: "none",
-                color: "white",
-                fontSize: 13,
-                fontWeight: 500,
-                textDecoration: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#2563eb";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = accent;
-              }}
-            >
-              <span>Launch Suite</span>
-              <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>→</span>
-            </a>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", margin: "-12px 0 24px", padding: "12px 16px", background: "#202024", border: "1px solid #3f3f46", borderRadius: 8 }}>
+          <div>
+            <label htmlFor="report-language" style={{ display: "block", color: "#f4f4f5", fontSize: 12, fontWeight: 700, marginBottom: 4 }}>REPORT LANGUAGE</label>
+            <span style={{ color: "#a1a1aa", fontSize: 11 }}>{reportLanguage === "en" ? "Case notes, names, IDs, and hashes stay in their original form." : "A print window opens; choose Save to PDF. Original case notes and identifiers stay unchanged."}</span>
           </div>
+          <select id="report-language" value={reportLanguage} onChange={(e) => setReportLanguage(e.target.value)} style={{ minWidth: 170, padding: "9px 12px", borderRadius: 6, border: "1px solid #52525b", background: "#18181b", color: "#f4f4f5", fontSize: 13, boxSizing: "border-box" }}>
+            <option value="en">English</option>
+            <option value="hi">हिन्दी (Hindi)</option>
+            <option value="te">తెలుగు (Telugu)</option>
+          </select>
         </div>
 
         {/* TABS */}
@@ -1603,10 +2102,20 @@ END OF RECORD`.trim();
             gap: 10
           }}
         >
-          {["generator", "scanner", "insights", "admin"].map((t) => (
+          {["generator", "scanner", "insights"].map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => {
+                requestNavigation(() => {
+                  setTab(t);
+                  if (t === "scanner") {
+                    setValidationError("");
+                    setCameraError("");
+                  } else {
+                    setIsCameraActive(false);
+                  }
+                });
+              }}
               style={{
                 padding: "8px 24px",
                 borderRadius: "18px",
@@ -1619,7 +2128,7 @@ END OF RECORD`.trim();
                 transition: "all 0.3s ease",
               }}
             >
-              {t === "generator" ? "Evidence Generator" : t === "scanner" ? "QR Scanner" : t === "insights" ? "Forensic Insights" : "Admin"}
+              {t === "generator" ? "Evidence Generator" : t === "scanner" ? "QR Scanner" : "Forensic Insights"}
             </button>
           ))}
           </div>
@@ -1692,7 +2201,6 @@ END OF RECORD`.trim();
                         height: 9,
                         borderRadius: "50%",
                         background: item.ready ? "#10b981" : "#71717a",
-                        boxShadow: item.ready ? "0 0 8px rgba(16, 185, 129, 0.7)" : "none",
                         flex: "0 0 auto",
                       }}
                     />
@@ -1752,8 +2260,8 @@ END OF RECORD`.trim();
                 <div style={{ color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 14 }}>
                   FSL ACCESSION DETAILS
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                     <label style={fslLabelStyle}>CASE / CRIME NUMBER</label>
                     <input
                       placeholder="e.g. FIR-2026-0142"
@@ -1762,7 +2270,7 @@ END OF RECORD`.trim();
                       style={fslFieldStyle}
                     />
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                     <label style={fslLabelStyle}>EXHIBIT / ARTICLE NUMBER</label>
                     <input
                       placeholder="e.g. EX-01 / A1"
@@ -1771,7 +2279,7 @@ END OF RECORD`.trim();
                       style={fslFieldStyle}
                     />
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                     <label style={fslLabelStyle}>FSL DIVISION</label>
                     <select
                       value={labDivision}
@@ -1783,7 +2291,7 @@ END OF RECORD`.trim();
                       ))}
                     </select>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                     <label style={fslLabelStyle}>RECEIVING / CUSTODY OFFICER</label>
                     <input
                       placeholder="Defaults to operator if blank"
@@ -1792,7 +2300,7 @@ END OF RECORD`.trim();
                       style={fslFieldStyle}
                     />
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                     <label style={fslLabelStyle}>SEAL CONDITION</label>
                     <select
                       value={sealCondition}
@@ -1804,7 +2312,7 @@ END OF RECORD`.trim();
                       ))}
                     </select>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                     <label style={fslLabelStyle}>SUBMISSION PRIORITY</label>
                     <select
                       value={priorityLevel}
@@ -1816,6 +2324,21 @@ END OF RECORD`.trim();
                       ))}
                     </select>
                   </div>
+                </div>
+              </div>
+              <div style={{ ...materialCardStyle, padding: 18, borderRadius: 8, background: "#202024", boxShadow: "none" }}>
+                <div style={{ color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 14 }}>SOURCE LOCATION</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14 }}>
+                  {[
+                    { label: "VILLAGE", value: village, setValue: setVillage, placeholder: "Enter village" },
+                    { label: "DISTRICT", value: district, setValue: setDistrict, placeholder: "Enter district" },
+                    { label: "STATE", value: regionState, setValue: setRegionState, placeholder: "Enter state" },
+                  ].map((field) => (
+                    <div key={field.label} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+                      <label style={fslLabelStyle}>{field.label}</label>
+                      <input value={field.value} onChange={(e) => field.setValue(e.target.value)} placeholder={field.placeholder} style={fslFieldStyle} />
+                    </div>
+                  ))}
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2242,7 +2765,7 @@ END OF RECORD`.trim();
               )}
               <div style={{ display: 'flex', gap: '10px' }}>
               <button
-                onClick={clearForm}
+                onClick={() => requestNavigation(clearForm)}
                 disabled={loading}
                 style={{
                   flex: 1,
@@ -2345,9 +2868,6 @@ END OF RECORD`.trim();
                   borderRadius: "16px",
                   boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
                 }}>
-                  {/* Animated glow effect */}
-
-                  
                   <div ref={qrRef}>
                     <QRCodeCanvas 
                       value={manifest ? "PHANIX:" + manifest.id : qrData} 
@@ -2381,7 +2901,6 @@ END OF RECORD`.trim();
                     borderRadius: "50%",
                     background: "#10b981",
                     boxShadow: "none",
-                    animation: "pulse 2s ease-in-out infinite"
                   }} />
                   <h3 style={{ 
                     margin: 0, 
@@ -2460,7 +2979,7 @@ END OF RECORD`.trim();
                       fontWeight: 700,
                     }}
                   >
-                    Download Report PDF
+                    {reportLanguage === "en" ? "Download Report PDF" : "Print / Save PDF"}
                   </button>
                   <button
                     onClick={copyReport}
@@ -2612,18 +3131,6 @@ END OF RECORD`.trim();
               position: "relative",
               overflow: "hidden"
             }}>
-              {/* Decorative glow */}
-              <div style={{
-                position: "absolute",
-                top: "-50%",
-                right: "-20%",
-                width: "300px",
-                height: "300px",
-                background: "radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%)",
-                borderRadius: "50%",
-                pointerEvents: "none"
-              }} />
-              
               {/* Header */}
               <div style={{ 
                 display: "flex", 
@@ -2659,7 +3166,6 @@ END OF RECORD`.trim();
                     height: '6px',
                     borderRadius: '50%',
                     background: '#10b981',
-                    boxShadow: '0 0 8px #10b981'
                   }} />
                   <span style={{
                     fontSize: '10px',
@@ -2697,20 +3203,7 @@ END OF RECORD`.trim();
                     border: '2px solid rgba(239, 68, 68, 0.4)',
                     overflow: 'hidden',
                     position: 'relative',
-                    boxShadow: '0 10px 40px rgba(239, 68, 68, 0.2), inset 0 1px 0 rgba(255,255,255,0.05)'
                   }}>
-                    {/* Animated warning background */}
-                    <div style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: 'linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.05), transparent)',
-                      animation: 'shimmer 3s infinite',
-                      pointerEvents: 'none'
-                    }} />
-                    
                     {/* Header */}
                     <div style={{
                       padding: '24px 28px',
@@ -2729,8 +3222,6 @@ END OF RECORD`.trim();
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          boxShadow: '0 8px 25px rgba(239, 68, 68, 0.4), 0 0 0 4px rgba(239, 68, 68, 0.15)',
-                          animation: 'pulse 2s infinite'
                         }}>
                           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
@@ -2746,7 +3237,6 @@ END OF RECORD`.trim();
                             letterSpacing: '1px',
                             textTransform: 'uppercase',
                             marginBottom: '6px',
-                            textShadow: '0 2px 10px rgba(239, 68, 68, 0.3)'
                           }}>
                             QR CODE CORRUPTED
                           </div>
@@ -2923,18 +3413,15 @@ END OF RECORD`.trim();
                           alignItems: 'center',
                           justifyContent: 'center',
                           gap: '10px',
-                          boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)',
                           transition: 'all 0.3s ease',
                           letterSpacing: '0.5px',
                           textTransform: 'uppercase'
                         }}
                         onMouseEnter={e => {
                           e.currentTarget.style.transform = 'translateY(-2px)';
-                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.4)';
                         }}
                         onMouseLeave={e => {
                           e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.boxShadow = '0 4px 15px rgba(239, 68, 68, 0.3)';
                         }}
                       >
                         <span>⬇️</span> DOWNLOAD FAILURE REPORT
@@ -2958,7 +3445,13 @@ END OF RECORD`.trim();
                 </div>
               )}
 
-              {isCameraActive && (
+              {cameraError && (
+                <div role="alert" style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 10, border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)", color: "#fcd34d", fontSize: 13 }}>
+                  Camera unavailable: {cameraError}
+                </div>
+              )}
+
+              {isCameraActive && tab === "scanner" && (
                 <div style={{ 
                   marginBottom: 25, 
                   borderRadius: 16, 
@@ -2993,7 +3486,6 @@ END OF RECORD`.trim();
                         height: '260px', 
                         border: `3px solid ${accent}`,
                         borderRadius: '24px',
-                        boxShadow: `0 0 30px ${accent}, inset 0 0 20px rgba(59, 130, 246, 0.2)`,
                         pointerEvents: 'none',
                         overflow: 'hidden',
                         background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%)'
@@ -3046,7 +3538,6 @@ END OF RECORD`.trim();
                             width: '100%',
                             height: '3px',
                             background: `linear-gradient(90deg, transparent 0%, ${accent} 50%, transparent 100%)`,
-                            boxShadow: `0 0 20px ${accent}, 0 0 40px ${accent}`,
                             animation: 'scan 2s infinite ease-in-out'
                         }}></div>
                     </div>
@@ -3064,7 +3555,6 @@ END OF RECORD`.trim();
                         padding: '8px 20px',
                         background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)',
                         borderRadius: '20px',
-                        boxShadow: '0 4px 15px rgba(59, 130, 246, 0.5)',
                         border: '1px solid rgba(255, 255, 255, 0.2)'
                       }}>
                         <div style={{
@@ -3072,7 +3562,6 @@ END OF RECORD`.trim();
                           fontSize: '13px',
                           fontWeight: 700,
                           letterSpacing: '1.5px',
-                          textShadow: '0 2px 4px rgba(0,0,0,0.3)',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '8px'
@@ -3103,15 +3592,12 @@ END OF RECORD`.trim();
                               fontSize: 22,
                               zIndex: 10,
                               transition: 'all 0.3s',
-                              boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)'
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'scale(1.1)';
-                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.3)';
                           }}
                           title="Switch Camera"
                       >
@@ -3162,7 +3648,6 @@ END OF RECORD`.trim();
                             cursor: 'pointer', 
                             fontSize: 14, 
                             fontWeight: 700,
-                            boxShadow: '0 6px 20px rgba(239, 68, 68, 0.3)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '10px',
@@ -3171,11 +3656,9 @@ END OF RECORD`.trim();
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = 'translateX(-50%) scale(1.05)';
-                          e.currentTarget.style.boxShadow = '0 8px 25px rgba(239, 68, 68, 0.4)';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.transform = 'translateX(-50%) scale(1)';
-                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.3)';
                         }}
                     >
                         <span style={{ fontSize: '16px' }}>⏹</span>
@@ -3193,7 +3676,11 @@ END OF RECORD`.trim();
                 zIndex: 1
               }}>
                   <button
-                    onClick={() => setIsCameraActive(true)}
+                    onClick={() => {
+                      setValidationError("");
+                      setCameraError("");
+                      setIsCameraActive(true);
+                    }}
                     style={{
                         flex: 1,
                         padding: "16px 20px",
@@ -3210,18 +3697,15 @@ END OF RECORD`.trim();
                         fontSize: 14,
                         fontWeight: 600,
                         transition: 'all 0.3s',
-                        boxShadow: `0 4px 15px rgba(59, 130, 246, 0.15)`,
                         position: 'relative',
                         overflow: 'hidden'
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.background = `linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(37, 99, 235, 0.25) 100%)`;
-                      e.currentTarget.style.boxShadow = `0 6px 20px rgba(59, 130, 246, 0.25)`;
                       e.currentTarget.style.transform = 'translateY(-2px)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = `linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)`;
-                      e.currentTarget.style.boxShadow = `0 4px 15px rgba(59, 130, 246, 0.15)`;
                       e.currentTarget.style.transform = 'translateY(0)';
                     }}
                   >
@@ -3248,18 +3732,15 @@ END OF RECORD`.trim();
                         fontSize: 14,
                         fontWeight: 600,
                         transition: 'all 0.3s',
-                        boxShadow: '0 4px 15px rgba(16, 185, 129, 0.15)',
                         position: 'relative',
                         overflow: 'hidden'
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(5, 150, 105, 0.25) 100%)';
-                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.25)';
                       e.currentTarget.style.transform = 'translateY(-2px)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%)';
-                      e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.15)';
                       e.currentTarget.style.transform = 'translateY(0)';
                     }}
                   >
@@ -3368,18 +3849,15 @@ END OF RECORD`.trim();
                     cursor: "pointer",
                     transition: "all 0.3s ease",
                     letterSpacing: '1px',
-                    boxShadow: `0 6px 20px rgba(59, 130, 246, 0.25)`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '10px'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = `0 8px 25px rgba(59, 130, 246, 0.35)`;
                     e.currentTarget.style.transform = 'translateY(-2px)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = `0 6px 20px rgba(59, 130, 246, 0.25)`;
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}
                 >
@@ -3425,26 +3903,10 @@ END OF RECORD`.trim();
                      display: 'flex',
                      justifyContent: 'space-between',
                      alignItems: 'center',
-                     boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL' 
-                       ? '0 8px 25px rgba(16, 185, 129, 0.25)'
-                       : '0 4px 12px rgba(0,0,0,0.1)',
+                     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                      position: 'relative',
                      overflow: 'hidden'
                    }}>
-                      {/* Animated background effect for TRUSTED SEAL */}
-                      {analysisReport.trustStatus === 'TRUSTED SEAL' && (
-                        <div style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          background: 'linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.1), transparent)',
-                          animation: 'shimmer 3s infinite',
-                          pointerEvents: 'none'
-                        }} />
-                      )}
-                      
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 1 }}>
                         <div style={{ 
                           width: 42, 
@@ -3457,10 +3919,6 @@ END OF RECORD`.trim();
                           alignItems: 'center', 
                           justifyContent: 'center',
                           color: 'white',
-                          boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL'
-                            ? '0 0 20px rgba(16, 185, 129, 0.5)'
-                            : `0 0 15px ${accent}44`,
-                          animation: analysisReport.trustStatus === 'TRUSTED SEAL' ? 'pulse 2s infinite' : 'none'
                         }}>
                           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -3511,37 +3969,7 @@ END OF RECORD`.trim();
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'center',
-                        boxShadow: analysisReport.trustStatus === 'TRUSTED SEAL'
-                          ? '0 10px 40px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
-                          : 'none'
                       }}>
-                        {/* Premium background effect for TRUSTED SEAL */}
-                        {analysisReport.trustStatus === 'TRUSTED SEAL' && (
-                          <>
-                            <div style={{
-                              position: 'absolute',
-                              top: '-50%',
-                              right: '-50%',
-                              width: '200%',
-                              height: '200%',
-                              background: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)',
-                              animation: 'rotate 20s linear infinite',
-                              pointerEvents: 'none'
-                            }} />
-                            <div style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              background: 'linear-gradient(45deg, transparent 30%, rgba(16, 185, 129, 0.05) 50%, transparent 70%)',
-                              backgroundSize: '200% 200%',
-                              animation: 'shimmer 4s ease-in-out infinite',
-                              pointerEvents: 'none'
-                            }} />
-                          </>
-                        )}
-                        
                         <div style={{ fontSize: 11, color: analysisReport.trustStatus === 'TRUSTED SEAL' ? '#6ee7b7' : '#a1a1aa', marginBottom: 16, fontWeight: 700, letterSpacing: '1.8px', opacity: 0.9, position: 'relative', zIndex: 1 }}>
                           INTEGRITY AUTHENTICATION
                         </div>
@@ -3556,8 +3984,6 @@ END OF RECORD`.trim();
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              boxShadow: '0 8px 25px rgba(16, 185, 129, 0.4), 0 0 0 4px rgba(16, 185, 129, 0.2)',
-                              animation: 'pulse 2s infinite'
                             }}>
                               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -3570,8 +3996,6 @@ END OF RECORD`.trim();
                               height: 18, 
                               borderRadius: '50%', 
                               background: analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#ef4444' : (analysisReport.riskLevel === 'MEDIUM' ? '#f59e0b' : '#3b82f6'),
-                              boxShadow: `0 0 15px ${analysisReport.trustStatus === 'TAMPERED PACKAGE' || analysisReport.riskLevel === 'HIGH' ? '#ef4444' : (analysisReport.riskLevel === 'MEDIUM' ? '#f59e0b' : '#3b82f6')}66`,
-                              animation: 'pulse 2.5s infinite'
                             }} />
                           )}
                           <div>
@@ -3581,7 +4005,6 @@ END OF RECORD`.trim();
                               fontSize: analysisReport.trustStatus === 'TRUSTED SEAL' ? 26 : 22,
                               letterSpacing: '1px',
                               textTransform: 'uppercase',
-                              textShadow: analysisReport.trustStatus === 'TRUSTED SEAL' ? '0 2px 10px rgba(16, 185, 129, 0.5)' : 'none',
                               marginBottom: 4
                             }}>
                               {analysisReport.trustStatus}
@@ -3680,7 +4103,7 @@ END OF RECORD`.trim();
                           transform: 'rotate(-10deg)',
                           pointerEvents: 'none',
                           color: '#fff',
-                          filter: analysisReport.trustStatus === 'TRUSTED SEAL' ? 'drop-shadow(0 0 20px rgba(16, 185, 129, 0.3))' : 'none'
+                          filter: 'none'
                         }}>
                           {analysisReport.trustStatus === 'TRUSTED SEAL' ? '🛡️' : (analysisReport.trustStatus === 'TAMPERED PACKAGE' ? '☣️' : '🔍')}
                         </div>
@@ -3817,15 +4240,12 @@ END OF RECORD`.trim();
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
-                                boxShadow: `0 2px 8px ${accent}44`
                               }}
                               onMouseEnter={e => {
                                 e.currentTarget.style.transform = 'translateY(-1px)';
-                                e.currentTarget.style.boxShadow = `0 4px 12px ${accent}66`;
                               }}
                               onMouseLeave={e => {
                                 e.currentTarget.style.transform = 'translateY(0)';
-                                e.currentTarget.style.boxShadow = `0 2px 8px ${accent}44`;
                               }}
                             >
                               <span>⬇️</span> DOWNLOAD REPORT
@@ -3964,6 +4384,10 @@ END OF RECORD`.trim();
                             ["RECEIVED BY", scanResult.data.receivedBy || scanResult.data.op],
                             ["SEAL CONDITION", scanResult.data.seal || "Not recorded"],
                             ["PRIORITY", scanResult.data.priority || "Routine"],
+                            ["REPORT LANGUAGE", ({ en: "English", hi: "Hindi", te: "Telugu" })[scanResult.data.reportLanguage] || "Not recorded"],
+                            ["VILLAGE", scanResult.data.village || "Not recorded"],
+                            ["DISTRICT", scanResult.data.district || "Not recorded"],
+                            ["STATE", scanResult.data.state || "Not recorded"],
                             ["SOURCE", scanResult.data.src],
                           ].map(([label, value]) => (
                             <div
@@ -4109,11 +4533,10 @@ END OF RECORD`.trim();
 	                              fontWeight: 800,
 	                              letterSpacing: 0.5,
 	                              textTransform: "uppercase",
-	                              boxShadow: "0 8px 20px rgba(16, 185, 129, 0.28)",
 	                              whiteSpace: "nowrap",
 	                            }}
 	                          >
-	                            Download Report PDF
+	                            {reportLanguage === "en" ? "Download Report PDF" : "Print / Save PDF"}
 	                          </button>
 	                        </div>
 	                      </div>
@@ -4220,11 +4643,10 @@ END OF RECORD`.trim();
                                 fontWeight: 800,
                                 letterSpacing: 0.5,
                                 textTransform: "uppercase",
-                                boxShadow: "0 8px 20px rgba(239, 68, 68, 0.28)",
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              Download Failed Report
+                              {reportLanguage === "en" ? "Download Failed Report" : "Print / Save Failure Report"}
                             </button>
                           </div>
                         </div>
@@ -4247,6 +4669,10 @@ END OF RECORD`.trim();
             const priority = (item.case && item.case.priority) || item.priority || item.priorityLevel || "Routine";
             const seal = (item.case && item.case.seal) || item.seal || item.sealCondition || "Intact";
             const source = (item.case && item.case.source) || item.source || item.evidenceSource || "";
+            const reportLanguage = (item.case && item.case.reportLanguage) || item.reportLanguage || "";
+            const village = (item.case && item.case.village) || item.village || "";
+            const district = (item.case && item.case.district) || item.district || "";
+            const state = (item.case && item.case.state) || item.state || "";
 
             const officerName = (item.officer && item.officer.name) || item.operator || item.officerName || "";
             const badge = (item.officer && item.officer.badge) || item.badge || "";
@@ -4287,6 +4713,10 @@ END OF RECORD`.trim();
               priority,
               seal,
               source,
+              reportLanguage,
+              village,
+              district,
+              state,
               officerName,
               badge,
               role,
@@ -4328,6 +4758,10 @@ END OF RECORD`.trim();
                 rec.badge,
                 rec.evidenceText,
                 rec.source,
+                rec.reportLanguage,
+                rec.village,
+                rec.district,
+                rec.state,
                 rec.id
               ].join(" ").toLowerCase();
               if (!corpus.includes(q)) return false;
@@ -4414,6 +4848,10 @@ END OF RECORD`.trim();
               "Priority",
               "Seal Condition",
               "Source",
+              "Report Language",
+              "Village",
+              "District",
+              "State",
               "Officer Name",
               "Badge",
               "Role",
@@ -4435,6 +4873,10 @@ END OF RECORD`.trim();
               escapeVal(r.priority),
               escapeVal(r.seal),
               escapeVal(r.source),
+              escapeVal(({ en: "English", hi: "Hindi", te: "Telugu" })[r.reportLanguage] || r.reportLanguage),
+              escapeVal(r.village),
+              escapeVal(r.district),
+              escapeVal(r.state),
               escapeVal(r.officerName),
               escapeVal(r.badge),
               escapeVal(r.role),
@@ -4470,7 +4912,11 @@ END OF RECORD`.trim();
                 division: rec.division,
                 priority: rec.priority,
                 seal: rec.seal,
-                source: rec.source
+                source: rec.source,
+                reportLanguage: rec.reportLanguage,
+                village: rec.village,
+                district: rec.district,
+                state: rec.state
               },
               officer: {
                 name: rec.officerName,
@@ -4568,7 +5014,12 @@ END OF RECORD`.trim();
                     onClick={async () => {
                       setAdminError("");
                       try {
-                        await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPass);
+                        const credential = await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPass);
+                        if (credential.user.email?.toLowerCase() !== "nittalaphaneendhar@gmail.com") {
+                          await signOut(auth);
+                          setAdminError("This account is not the administrator account.");
+                          return;
+                        }
                         setAdminPass("");
                       } catch {
                         setAdminError("Login failed. Check email and password.");
@@ -4611,7 +5062,6 @@ END OF RECORD`.trim();
                       <button
                         onClick={async () => {
                           await signOut(auth);
-                          await signInAnonymously(auth).catch(() => {});
                           setAdminList([]);
                           setAdminPicked(null);
                         }}
@@ -4959,6 +5409,13 @@ END OF RECORD`.trim();
                                   </div>
                                 </div>
 
+                                {(item.reportLanguage || item.village || item.district || item.state) && (
+                                  <div style={{ color: "#a1a1aa", fontSize: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                                    {item.reportLanguage && <span>Report language: {({ en: "English", hi: "Hindi", te: "Telugu" })[item.reportLanguage] || item.reportLanguage}</span>}
+                                    {(item.village || item.district || item.state) && <span>Location: {[item.village, item.district, item.state].filter(Boolean).join(", ")}</span>}
+                                  </div>
+                                )}
+
                                 {/* CARD BOTTOM ROW: DATE & ACTION LINK */}
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px solid #222226", fontSize: 12 }}>
                                   <div style={{ color: "#71717a", display: "flex", alignItems: "center", gap: 5 }}>
@@ -5079,6 +5536,22 @@ END OF RECORD`.trim();
                           <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
                             <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Evidence Source</div>
                             <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.source || "Unspecified"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Report Language</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{({ en: "English", hi: "Hindi", te: "Telugu" })[pickedNormalized.reportLanguage] || pickedNormalized.reportLanguage || "Not recorded"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>Village</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.village || "Not recorded"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>District</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.district || "Not recorded"}</div>
+                          </div>
+                          <div style={{ background: "#09090b", padding: "12px 14px", borderRadius: 8, border: "1px solid #27272a" }}>
+                            <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", marginBottom: 4 }}>State</div>
+                            <div style={{ fontSize: 14, color: "#f4f4f5", fontWeight: 600 }}>{pickedNormalized.state || "Not recorded"}</div>
                           </div>
                         </div>
                       </div>
@@ -5229,7 +5702,7 @@ END OF RECORD`.trim();
                 left: 0,
                 right: 0,
                 height: '100%',
-                background: 'radial-gradient(circle at top right, rgba(59, 130, 246, 0.06) 0%, transparent 60%)',
+                background: 'transparent',
                 pointerEvents: 'none'
               }} />
               
@@ -5361,7 +5834,6 @@ END OF RECORD`.trim();
                                 fontWeight: 600,
                                 color: i === 3 ? "white" : "#f4f4f5",
                                 border: i === 3 ? "none" : "1px solid rgba(255,255,255,0.08)",
-                                boxShadow: i === 3 ? `0 4px 16px rgba(59, 130, 246, 0.3)` : 'none',
                                 transition: 'all 0.3s ease',
                                 textAlign: 'center',
                                 display: 'flex',
@@ -5669,7 +6141,6 @@ END OF RECORD`.trim();
                       fontSize: 14,
                       fontWeight: 'bold',
                       color: 'white',
-                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                     }}>✓</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ 
@@ -5870,10 +6341,6 @@ END OF RECORD`.trim();
                   verifyStatus === "valid"
                     ? "1px solid #107C10" // Microsoft Green
                     : "1px solid #E81123", // Microsoft Red
-                boxShadow:
-                  verifyStatus === "valid"
-                    ? "0 0 20px rgba(16, 124, 16, 0.1)"
-                    : "0 0 20px rgba(232, 17, 35, 0.1)",
               }}
             >
               <div
@@ -6062,23 +6529,74 @@ END OF RECORD`.trim();
         )}
       </div>
 
+      {showSaveReminder && (
+        <div onClick={dismissSaveReminder} style={{ position: "fixed", inset: 0, zIndex: 11000, display: "grid", placeItems: "center", padding: 20, background: "rgba(0,0,0,0.72)" }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="save-reminder-title" onClick={(event) => event.stopPropagation()} style={{ width: "100%", maxWidth: 460, padding: 26, borderRadius: 14, background: "#202024", border: "1px solid #3f3f46", boxSizing: "border-box" }}>
+            <h2 id="save-reminder-title" style={{ margin: "0 0 8px", color: "#f4f4f5", fontSize: 20 }}>Please download your QR and report</h2>
+            <p style={{ margin: "0 0 18px", color: "#a1a1aa", fontSize: 13, lineHeight: 1.6 }}>Save both files before leaving so you have a copy of this evidence package.</p>
+            <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
+              <button type="button" onClick={saveQR} style={{ padding: 11, borderRadius: 8, border: "1px solid #52525b", background: "#18181b", color: "#f4f4f5", fontWeight: 600, cursor: "pointer" }}>{qrDownloaded ? "QR downloaded ✓" : "Download QR"}</button>
+              <button type="button" onClick={downloadGeneratedForensicReport} style={{ padding: 11, borderRadius: 8, border: "1px solid #3b82f6", background: "rgba(59,130,246,0.12)", color: "#bfdbfe", fontWeight: 600, cursor: "pointer" }}>{reportExportStarted ? "Report export started ✓" : reportLanguage === "en" ? "Download report PDF" : "Print / save report PDF"}</button>
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button type="button" onClick={dismissSaveReminder} style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #52525b", background: "transparent", color: "#e4e4e7", cursor: "pointer" }}>Stay here</button>
+              <button type="button" onClick={continueWithoutSaving} style={{ padding: "9px 14px", borderRadius: 8, border: 0, background: "#3b82f6", color: "white", fontWeight: 600, cursor: "pointer" }}>{qrDownloaded && reportExportStarted ? "Continue" : "Continue without saving"}</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showGeneratedNotice && !showSaveReminder && manifest && (
+        <aside role="status" aria-live="polite" style={{ position: "fixed", right: 24, bottom: 24, zIndex: 9000, width: "min(420px, calc(100vw - 32px))", padding: 18, borderRadius: 14, background: "#202024", border: "1px solid #3f3f46", boxShadow: "0 16px 48px rgba(0,0,0,0.4)", boxSizing: "border-box", animation: "fadeIn 180ms ease-out" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <div aria-hidden="true" style={{ width: 34, height: 34, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: 10, color: "#6ee7b7", background: "rgba(16,185,129,0.12)", fontSize: 18 }}>✓</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: "#f4f4f5", fontSize: 14, fontWeight: 700 }}>Evidence package generated</div>
+              <div style={{ marginTop: 4, color: "#a1a1aa", fontSize: 12, lineHeight: 1.5 }}>Please download the QR and report to keep your copy.</div>
+            </div>
+            <button type="button" aria-label="Dismiss download reminder" onClick={() => setShowGeneratedNotice(false)} style={{ border: 0, background: "transparent", color: "#a1a1aa", cursor: "pointer", fontSize: 20, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button type="button" onClick={saveQR} style={{ flex: 1, padding: "9px 10px", borderRadius: 8, border: "1px solid #52525b", background: "#18181b", color: "#f4f4f5", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Download QR</button>
+            <button type="button" onClick={downloadGeneratedForensicReport} style={{ flex: 1, padding: "9px 10px", borderRadius: 8, border: "1px solid #3b82f6", background: "rgba(59,130,246,0.12)", color: "#bfdbfe", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{reportLanguage === "en" ? "Download report" : "Print / save report"}</button>
+          </div>
+        </aside>
+      )}
+
+      {isAdminLoginOpen && !signedInUser && (
+        <div onClick={() => setIsAdminLoginOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(5px)" }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="admin-login-title" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, padding: 28, borderRadius: 16, background: "#18181b", border: "1px solid #3f3f46", boxShadow: "0 24px 80px rgba(0,0,0,0.55)", position: "relative" }}>
+            <button type="button" onClick={() => setIsAdminLoginOpen(false)} aria-label="Close admin login" style={{ position: "absolute", top: 12, right: 14, border: 0, background: "transparent", color: "#a1a1aa", fontSize: 24, cursor: "pointer" }}>×</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: accent, fontSize: 18 }}>🛡️</div>
+              <div><h3 id="admin-login-title" style={{ margin: 0, fontSize: 19, color: "#f4f4f5", fontWeight: 700 }}>Authorized Account Sign In</h3><div style={{ fontSize: 12, color: "#a1a1aa" }}>Sign in to create or verify an evidence package</div></div>
+            </div>
+            <p style={{ margin: "12px 0 20px", fontSize: 13, color: "#a1a1aa", lineHeight: 1.5 }}>Use an account issued and approved by the administrator.</p>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setAdminError("");
+              try {
+                const credential = await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPass);
+                setAdminPass("");
+                setIsAdminLoginOpen(false);
+                if (credential.user.email?.toLowerCase() === "nittalaphaneendhar@gmail.com") setTab("admin");
+              } catch {
+                setAdminError("Login failed. Check email and password.");
+              }
+            }}>
+              <input autoFocus type="email" placeholder="Account email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} required style={{ width: "100%", padding: "11px 14px", marginBottom: 12, borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14, boxSizing: "border-box", outline: "none" }} />
+              <input type="password" placeholder="Password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} required style={{ width: "100%", padding: "11px 14px", marginBottom: 16, borderRadius: 8, border: "1px solid #3f3f46", background: "#09090b", color: "#f4f4f5", fontSize: 14, boxSizing: "border-box", outline: "none" }} />
+              {adminError && <div style={{ color: "#fca5a5", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 14 }}>{adminError}</div>}
+              <button type="submit" style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: accent, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
+            </form>
+          </section>
+        </div>
+      )}
+
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
         @keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
-        @keyframes pulse {
-          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-          70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-        }
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        @keyframes rotate {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
